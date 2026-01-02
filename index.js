@@ -131,36 +131,39 @@ client.on("messageCreate", async (message) => {
   const content = message.content;
   const guild = message.guild;
 
-  // --- HIER DEINE CHANNEL-IDs EINTRAGEN ---
-  const depositChannelId = "DEINE_DEPOSIT_CHANNEL_ID_HIER";
-  const withdrawChannelId = "DEINE_WITHDRAW_CHANNEL_ID_HIER";
+  // === HIER DEINE LOG-CHANNEL-IDs EINTRAGEN ===
+  const depositLogChannelId = "1456726864134668359";
+  const withdrawLogChannelId = "1456733883021267038";
 
-  // --- LOGS für Deposit ---
-  if (content.startsWith("!deposit")) {
-    const logChannel = guild.channels.cache.get(depositChannelId);
-    if (logChannel) {
+  try {
+    // --- LOGS FÜR DEPOSIT ---
+    if (content.startsWith("!deposit")) {
       const parts = content.split(" ");
       const item = parts[1] || "unknown";
       const amount = parts[2] || "unknown";
 
-      await logChannel.send(`${message.author.tag} | deposit | ${item} | ${amount}`);
+      const depositLogChannel = guild.channels.cache.get(depositLogChannelId);
+      if (depositLogChannel) {
+        await depositLogChannel.send(`✅ ${message.author.tag} | deposit | ${item} | ${amount}`);
+      }
     }
-  }
 
-  // --- LOGS für Withdraw ---
-  if (content.startsWith("!withdraw")) {
-    const logChannel = guild.channels.cache.get(withdrawChannelId);
-    if (logChannel) {
+    // --- LOGS FÜR WITHDRAW ---
+    if (content.startsWith("!withdraw")) {
       const parts = content.split(" ");
       const item = parts[1] || "unknown";
       const amount = parts[2] || "unknown";
 
-      await logChannel.send(`${message.author.tag} | withdraw | ${item} | ${amount}`);
+      const withdrawLogChannel = guild.channels.cache.get(withdrawLogChannelId);
+      if (withdrawLogChannel) {
+        await withdrawLogChannel.send(`✅ ${message.author.tag} | withdraw | ${item} | ${amount}`);
+      }
     }
-  }
 
-  // --- HIER DARUNTER DEIN EXISTIERENDER STASH-CODE ---
-  // z.B. alles, was den Gang-Stash aktualisiert
-  // So läuft es parallel zum Log
+    // --- EXISTIERENDER INVENTORY-CODE BLEIBT HIER UNVERÄNDERT ---
+    // Dein Gang-Stash wird dadurch nicht verändert
+  } catch (err) {
+    console.error("Fehler beim Loggen:", err);
+  }
 });
 
