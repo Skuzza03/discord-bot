@@ -13,9 +13,9 @@ const inventoryFile = "./inventory.json";
 let inventoryMessageId = null;
 
 // === HIER DEINE CHANNEL-IDs EINTRAGEN ===
-const stashChannelId = "1456489075941834949";       // Gang Stash Inventory
-const depositLogChannelId = "1456726864134668359"; // Deposit Logs
-const withdrawLogChannelId = "1456733883021267038"; // Withdraw Logs
+const stashChannelId = "1456489075941834949";       
+const depositLogChannelId = "1456726864134668359"; 
+const withdrawLogChannelId = "1456733883021267038"; 
 
 // Load inventory
 function loadInventory() {
@@ -46,7 +46,7 @@ function formatInventory(inventory) {
   return text;
 }
 
-// Update inventory message in the channel
+// Update inventory message
 async function updateInventoryMessage(channel) {
   const inventory = loadInventory();
   const text = formatInventory(inventory);
@@ -72,7 +72,7 @@ async function updateInventoryMessage(channel) {
 client.once("ready", async () => {
   console.log("✅ Bot is online!");
   const channel = await client.channels.fetch(stashChannelId).catch(() => null);
-  if (channel) updateInventoryMessage(channel); // create initial inventory message
+  if (channel) updateInventoryMessage(channel);
 });
 
 // Commands
@@ -84,7 +84,7 @@ client.on("messageCreate", async (message) => {
 
   if (!["!deposit", "!withdraw"].includes(command)) return;
 
-  // Delete command message to keep channel clean
+  // Delete command message
   message.delete().catch(() => {});
 
   if (args.length < 2) return;
@@ -97,19 +97,18 @@ client.on("messageCreate", async (message) => {
   const inventory = loadInventory();
   const stashChannel = await client.channels.fetch(stashChannelId).catch(() => null);
 
-  // --- LOGS FÜR DEPOSIT UND WITHDRAW (CRASH-SICHER) ---
+  // --- LOGS ---
   try {
     if (command === "!deposit") {
       const logChannel = await client.channels.fetch(depositLogChannelId).catch(() => null);
       if (logChannel) logChannel.send(`✅ ${message.author.tag} | deposit | ${item} | ${amount}`).catch(() => {});
     }
-
     if (command === "!withdraw") {
       const logChannel = await client.channels.fetch(withdrawLogChannelId).catch(() => null);
       if (logChannel) logChannel.send(`✅ ${message.author.tag} | withdraw | ${item} | ${amount}`).catch(() => {});
     }
   } catch (err) {
-    console.error("Fehler beim Loggen:", err);
+    console.error("Log Fehler:", err);
   }
 
   // --- INVENTORY UPDATE ---
@@ -124,4 +123,21 @@ client.on("messageCreate", async (message) => {
   }
 
   if (command === "!withdraw") {
-    if (!inve
+    if (!inventory[item] || inventory[item] < amount) {
+      return message.channel.send("❌ Not enough items!")
+        .then(msg => setTimeout(() => msg.delete().catch(() => {}), 3000));
+    }
+
+    inventory[item] -= amount;
+    if (inventory[item] === 0) delete inventory[item];
+    saveInventory(inventory);
+
+    message.channel.send(`📤 Removed ${amount} ${item} from the stash!`)
+      .then(msg => setTimeout(() => msg.delete().catch(() => {}), 3000));
+
+    if (stashChannel) updateInventoryMessage(stashChannel);
+  }
+});
+
+// --- LOGIN ---
+client.login(process.env.TOKEN);
