@@ -127,15 +127,19 @@ client.on("messageCreate", async (message) => {
 client.login(process.env.TOKEN);
 
 client.on("messageCreate", async (message) => {
+  // Eigene Bot-Nachrichten ignorieren
   if (message.author.bot) return;
 
   const content = message.content;
-  const guild = message.guild;
 
-  // Deposit log
+  // --- HIER DEINE CHANNEL-IDs EINTRAGEN ---
+  const depositChannelId = "1456726864134668359";
+  const withdrawChannelId = "1456733883021267038";
+
+  // --- DEPOSIT LOG ---
   if (content.startsWith("!deposit")) {
-    const logChannel = guild.channels.cache.find((ch) => ch.name === "StashDEPOSIT");
-    if (!logChannel) return;
+    const logChannel = message.guild.channels.cache.get(depositChannelId);
+    if (!logChannel) return; // falls ID falsch oder Channel nicht gefunden
 
     const parts = content.split(" ");
     const item = parts[1] || "unknown";
@@ -144,10 +148,10 @@ client.on("messageCreate", async (message) => {
     logChannel.send(`${message.author.tag} | deposit | ${item} | ${amount}`);
   }
 
-  // Withdraw log
+  // --- WITHDRAW LOG ---
   if (content.startsWith("!withdraw")) {
-    const logChannel = guild.channels.cache.find((ch) => ch.name === "StashWITHDRAW");
-    if (!logChannel) return;
+    const logChannel = message.guild.channels.cache.get(withdrawChannelId);
+    if (!logChannel) return; // falls ID falsch oder Channel nicht gefunden
 
     const parts = content.split(" ");
     const item = parts[1] || "unknown";
@@ -156,5 +160,3 @@ client.on("messageCreate", async (message) => {
     logChannel.send(`${message.author.tag} | withdraw | ${item} | ${amount}`);
   }
 });
-
-
