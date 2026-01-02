@@ -127,36 +127,40 @@ client.on("messageCreate", async (message) => {
 client.login(process.env.TOKEN);
 
 client.on("messageCreate", async (message) => {
-  // Eigene Bot-Nachrichten ignorieren
-  if (message.author.bot) return;
-
+  if (message.author.bot) return; // eigene Bot-Nachrichten ignorieren
   const content = message.content;
+  const guild = message.guild;
 
   // --- HIER DEINE CHANNEL-IDs EINTRAGEN ---
-  const depositChannelId = "1456726864134668359";
-  const withdrawChannelId = "1456733883021267038";
+  const depositChannelId = "DEINE_DEPOSIT_CHANNEL_ID_HIER";
+  const withdrawChannelId = "DEINE_WITHDRAW_CHANNEL_ID_HIER";
 
-  // --- DEPOSIT LOG ---
+  // --- LOGS für Deposit ---
   if (content.startsWith("!deposit")) {
-    const logChannel = message.guild.channels.cache.get(depositChannelId);
-    if (!logChannel) return; // falls ID falsch oder Channel nicht gefunden
+    const logChannel = guild.channels.cache.get(depositChannelId);
+    if (logChannel) {
+      const parts = content.split(" ");
+      const item = parts[1] || "unknown";
+      const amount = parts[2] || "unknown";
 
-    const parts = content.split(" ");
-    const item = parts[1] || "unknown";
-    const amount = parts[2] || "unknown";
-
-    logChannel.send(`${message.author.tag} | deposit | ${item} | ${amount}`);
+      await logChannel.send(`${message.author.tag} | deposit | ${item} | ${amount}`);
+    }
   }
 
-  // --- WITHDRAW LOG ---
+  // --- LOGS für Withdraw ---
   if (content.startsWith("!withdraw")) {
-    const logChannel = message.guild.channels.cache.get(withdrawChannelId);
-    if (!logChannel) return; // falls ID falsch oder Channel nicht gefunden
+    const logChannel = guild.channels.cache.get(withdrawChannelId);
+    if (logChannel) {
+      const parts = content.split(" ");
+      const item = parts[1] || "unknown";
+      const amount = parts[2] || "unknown";
 
-    const parts = content.split(" ");
-    const item = parts[1] || "unknown";
-    const amount = parts[2] || "unknown";
-
-    logChannel.send(`${message.author.tag} | withdraw | ${item} | ${amount}`);
+      await logChannel.send(`${message.author.tag} | withdraw | ${item} | ${amount}`);
+    }
   }
+
+  // --- HIER DARUNTER DEIN EXISTIERENDER STASH-CODE ---
+  // z.B. alles, was den Gang-Stash aktualisiert
+  // So läuft es parallel zum Log
 });
+
