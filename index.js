@@ -126,5 +126,35 @@ client.on("messageCreate", async (message) => {
 
 client.login(process.env.TOKEN);
 
+client.on("messageCreate", async (message) => {
+  if (message.author.bot) return;
+
+  const content = message.content;
+  const guild = message.guild;
+
+  // Deposit log
+  if (content.startsWith("!deposit")) {
+    const logChannel = guild.channels.cache.find((ch) => ch.name === "StashDEPOSIT");
+    if (!logChannel) return;
+
+    const parts = content.split(" ");
+    const item = parts[1] || "unknown";
+    const amount = parts[2] || "unknown";
+
+    logChannel.send(`${message.author.tag} | deposit | ${item} | ${amount}`);
+  }
+
+  // Withdraw log
+  if (content.startsWith("!withdraw")) {
+    const logChannel = guild.channels.cache.find((ch) => ch.name === "StashWITHDRAW");
+    if (!logChannel) return;
+
+    const parts = content.split(" ");
+    const item = parts[1] || "unknown";
+    const amount = parts[2] || "unknown";
+
+    logChannel.send(`${message.author.tag} | withdraw | ${item} | ${amount}`);
+  }
+});
 
 
