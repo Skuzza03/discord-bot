@@ -11,7 +11,11 @@ const client = new Client({
 
 const inventoryFile = "./inventory.json";
 let inventoryMessageId = null;
-const channelId = "1456489075941834949"; // <-- Replace with your Discord channel ID
+
+// === HIER DEINE CHANNEL-IDs EINTRAGEN ===
+const stashChannelId = "1456489075941834949"; // Gang Stash Inventory
+const depositLogChannelId = "1456726864134668359"; // Deposit Logs
+const withdrawLogChannelId = "1456733883021267038"; // Withdraw Logs
 
 // Load inventory
 function loadInventory() {
@@ -67,8 +71,8 @@ async function updateInventoryMessage(channel) {
 // Bot ready
 client.once("ready", async () => {
   console.log("✅ Bot is online!");
-  const channel = await client.channels.fetch(channelId);
-  updateInventoryMessage(channel); // create initial empty inventory message
+  const channel = await client.channels.fetch(stashChannelId);
+  updateInventoryMessage(channel); // create initial inventory message
 });
 
 // Commands
@@ -86,42 +90,24 @@ client.on("messageCreate", async (message) => {
   if (args.length < 2) return;
 
   const amount = parseInt(args[args.length - 1]);
-  const item = args.slice(0, args.length - 1).join(" ").toLowerCase(); // case-insensitive
+  const item = args.slice(0, args.length - 1).join(" ").toLowerCase();
 
   if (!item || amount <= 0 || isNaN(amount)) return;
 
   const inventory = loadInventory();
-  const channel = await client.channels.fetch(channelId);
+  const stashChannel = await client.channels.fetch(stashChannelId);
 
-  // Prevent invalid junk items (numbers only)
-  if (/^\d+$/.test(item)) return;
-
+  // --- LOGS FÜR DEPOSIT UND WITHDRAW ---
   if (command === "!deposit") {
-    inventory[item] = (inventory[item] || 0) + amount;
-    saveInventory(inventory);
-
-    // Optional short confirmation that deletes automatically
-    message.channel.send(`📥 Added ${amount} ${item} to the stash!`)
-      .then(msg => setTimeout(() => msg.delete().catch(() => {}), 3000));
-
-    updateInventoryMessage(channel);
+    const logChannel = await client.channels.fetch(depositLogChannelId).catch(() => null);
+    if (logChannel) logChannel.send(`✅ ${message.author.tag} | deposit | ${item} | ${amount}`);
   }
 
   if (command === "!withdraw") {
-    if (!inventory[item] || inventory[item] < amount) {
-      return message.channel.send("❌ Not enough items!")
-        .then(msg => setTimeout(() => msg.delete().catch(() => {}), 3000));
-    }
-
-    inventory[item] -= amount;
-    if (inventory[item] === 0) delete inventory[item]; // remove if 0
-    saveInventory(inventory);
-
-    message.channel.send(`📤 Removed ${amount} ${item} from the stash!`)
-      .then(msg => setTimeout(() => msg.delete().catch(() => {}), 3000));
-
-    updateInventoryMessage(channel);
+    const logChannel = await client.channels.fetch(withdrawLogChannelId).catch(() => null);
+    if (logChannel) logChannel.send(`✅ ${message.author.tag} | withdraw | ${item} | ${amount}`);
   }
-});
 
-client.login(process.env.TOKEN);
+  // --- INVENTORY UPDATE ---
+  if (command === "!deposit") {
+    inventory[item] = (inv
