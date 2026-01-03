@@ -127,7 +127,16 @@ client.on("messageCreate", async message => {
   const command = matchCommand[1].toLowerCase();
   let rest = matchCommand[2].trim();
 
-  // Kategorie optional am Ende
+  // --- Rollen Check ---
+  const hasRole = message.member.roles.cache.some(role => allowedRoles.includes(role.name));
+  if (!hasRole) {
+    await message.reply("❌ You don’t have permission!").then(msg =>
+      setTimeout(() => msg.delete().catch(() => {}), 4000)
+    );
+    return message.delete().catch(() => {}); // Command Nachricht löschen
+  }
+
+  // --- Kategorie optional ---
   let category = "Other";
   const categoryMatch = rest.match(/\(([^)]+)\)$/);
   if (categoryMatch) {
@@ -135,29 +144,23 @@ client.on("messageCreate", async message => {
     rest = rest.replace(/\([^)]+\)$/, "").trim();
   }
 
-  // Amount = letzte Zahl
+  // --- Amount = letzte Zahl ---
   const amountMatch = rest.match(/(\d+)$/);
-  if (!amountMatch) return;
+  if (!amountMatch) return message.reply("❌ Invalid command!").then(msg =>
+    setTimeout(() => msg.delete().catch(() => {}), 4000)
+  );
   const amount = parseInt(amountMatch[1]);
 
-  // Item = alles davor
+  // --- Item = alles davor ---
   const item = rest.slice(0, rest.lastIndexOf(amountMatch[1])).trim().toLowerCase();
-
   if (!item || amount <= 0) return;
 
-  // --- Rollen Check vor allem ---
-  const hasRole = message.member.roles.cache.some(role => allowedRoles.includes(role.name));
-  if (!hasRole) {
-    return message.reply("❌ You don’t have permission!").then(msg =>
-      setTimeout(() => msg.delete().catch(() => {}), 4000)
-    );
-  }
-
-  // --- Inventory bearbeiten ---
+  // --- Load Inventory ---
   const inventory = loadInventory();
   if (!inventory[category]) inventory[category] = {};
   if (!inventory[category][item]) inventory[category][item] = 0;
 
+  // --- Deposit / Withdraw ---
   if (command === "deposit") inventory[category][item] += amount;
   else {
     if (!inventory[category][item] || inventory[category][item] < amount) {
