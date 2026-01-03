@@ -11,9 +11,9 @@ const allowedRoles = [
 ];
 
 // Channel IDs
-const stashChannelId = "YOUR_STASH_CHANNEL_ID"; // Inventory display
-const depositLogChannelId = "YOUR_DEPOSIT_LOG_CHANNEL_ID";
-const withdrawLogChannelId = "YOUR_WITHDRAW_LOG_CHANNEL_ID";
+const stashChannelId = "1456489075941834949"; // Inventory display
+const depositLogChannelId = "1456726864134668359";
+const withdrawLogChannelId = "1456733883021267038";
 
 // Inventory Datei
 const inventoryFile = "./inventory.json";
