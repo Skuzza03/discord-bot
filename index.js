@@ -42,35 +42,39 @@ function sendStashLog({ channel, action, user, item, amount, category }) {
   channel.send({ embeds: [embed] }).catch(() => {});
 }
 
-// --- Richtig große Gang Stash Inventory ---
+// --- Gang Stash Inventory (MDT Style) ---
 function buildInventoryEmbed(inventory) {
   const embed = new EmbedBuilder()
-    .setTitle("💎 GANG STASH INVENTORY 💎")
+    .setTitle("GANG STASH INVENTORY")
     .setColor(0x111111)
     .setFooter({ text: "Gang Inventory System" })
     .setTimestamp();
 
-  const categories = [
-    { name: "Weapons", color: 0xe74c3c },
-    { name: "Drugs", color: 0x2ecc71 },
-    { name: "Materials", color: 0x3498db },
-    { name: "Other", color: 0x95a5a6 }
-  ];
+  const categoryColors = {
+    Weapons: 0xff0000,
+    Drugs: 0x2ecc71,
+    Materials: 0x3498db,
+    Other: 0x95a5a6
+  };
 
-  for (const cat of categories) {
-    const items = inventory[cat.name];
+  for (const [category, items] of Object.entries(inventory)) {
+    if (!items || Object.keys(items).length === 0) continue;
+
     let value = "";
+    const sorted = Object.entries(items).sort((a, b) => b[1] - a[1]);
 
-    if (!items || Object.keys(items).length === 0) {
-      value = "—";
-    } else {
-      const sorted = Object.entries(items).sort((a, b) => b[1] - a[1]);
-      for (const [item, amount] of sorted) {
-        value += `\`${item}\` × ${amount}\n`;
-      }
+    for (const [item, amount] of sorted) {
+      // Färbe Items je Kategorie
+      const color = categoryColors[category] || 0xffffff;
+      value += `**${item}** × ${amount}\n`;
     }
 
-    embed.addFields({ name: `🟢 ${cat.name}`, value: value, inline: true });
+    embed.addFields({ name: category, value: value, inline: false });
+  }
+
+  // Wenn komplett leer
+  if (Object.keys(inventory).length === 0) {
+    embed.setDescription("Stash is empty.");
   }
 
   return embed;
