@@ -49,18 +49,24 @@ function sendStashLog({ channel, action, user, item, amount, category }) {
   channel.send({ embeds: [embed] }).catch(() => {});
 }
 
-// --- Modern Gang Stash Inventory Embed ---
+// --- Modern Gang Stash Inventory Embed (NEUES DESIGN) ---
 function buildInventoryEmbed(inventory) {
   const embed = new EmbedBuilder()
-    .setTitle("Gang Stash Inventory")
-    .setColor(0x1f1f1f)
+    .setTitle("💎 GANG STASH INVENTORY 💎")
+    .setColor(0x0f0f0f)
     .setFooter({ text: "Gang Inventory System" })
     .setTimestamp();
 
-  const categoryOrder = ["Weapons", "Drugs", "Materials", "Other"];
+  // Farben pro Kategorie
+  const categories = [
+    { name: "Weapons", color: 0xe74c3c },  // rot
+    { name: "Drugs", color: 0x2ecc71 },    // grün
+    { name: "Materials", color: 0x3498db },// blau
+    { name: "Other", color: 0x95a5a6 }     // grau
+  ];
 
-  for (const category of categoryOrder) {
-    const items = inventory[category];
+  for (const cat of categories) {
+    const items = inventory[cat.name];
     let value = "";
 
     if (!items || Object.keys(items).length === 0) {
@@ -72,7 +78,7 @@ function buildInventoryEmbed(inventory) {
       }
     }
 
-    embed.addFields({ name: category, value: value, inline: true });
+    embed.addFields({ name: cat.name, value: value, inline: true });
   }
 
   return embed;
@@ -143,12 +149,11 @@ client.on("messageCreate", async message => {
     category = categoryMatch[1].trim();
     rest = rest.replace(/\([^)]+\)$/, "").trim();
   } else {
-    // Wenn kein Klammern: letzte Wort als Kategorie prüfen
     const parts = rest.split(" ");
     const lastWord = parts[parts.length - 1].toLowerCase();
     const validCategories = ["weapons", "drugs", "materials"];
     if (validCategories.includes(lastWord)) {
-      category = lastWord[0].toUpperCase() + lastWord.slice(1); // Formatieren
+      category = lastWord[0].toUpperCase() + lastWord.slice(1);
       parts.pop();
       rest = parts.join(" ");
     }
