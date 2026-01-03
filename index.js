@@ -29,59 +29,41 @@ function saveInventory(data) {
   fs.writeFileSync(inventoryFile, JSON.stringify(data, null, 2));
 }
 
-// --- ASCII MDT Gang Stash Board ---
+// --- ASCII MDT Gang Stash Builder ---
 function buildAsciiInventory(inventory) {
-  const pad = (text, length) => text.padEnd(length, " ");
-  const dash = (length) => "═".repeat(length);
-
-  const widthCategory = 20;
-  const widthItems = 55;
-  const totalWidth = widthCategory + widthItems + 3;
-
+  const padRight = (text, length) => text.padEnd(length, " ");
+  const padLeft = (text, length) => text.padStart(length, " ");
+  const lineLength = 70;
   let lines = [];
 
-  // Header
-  lines.push(`╔${dash(totalWidth)}╗`);
-  lines.push(`║${pad("GANG STASH", totalWidth)}║`);
-  lines.push(`║${pad("Inventory Dashboard", totalWidth)}║`);
-  lines.push(`╠${dash(widthCategory)}╦${dash(widthItems)}╣`);
-  lines.push(`║ CATEGORY${pad("", widthCategory - 8)}║ ITEMS${pad("", widthItems - 5)}║`);
-  lines.push(`╠${dash(widthCategory)}╬${dash(widthItems)}╣`);
+  lines.push("PINKPANTHER STASH");
+  lines.push("─".repeat(lineLength));
+  const categories = ["Weapons", "Drugs", "Materials", "Others"];
 
-  const categories = ["Weapons", "Drugs", "Materials", "Other"];
-  for (const category of categories) {
-    const items = inventory[category] || {};
+  for (const cat of categories) {
+    const items = inventory[cat] || {};
     const itemKeys = Object.keys(items);
-    if (itemKeys.length === 0) {
-      lines.push(`║ ${pad(category.toUpperCase(), widthCategory - 1)}║ ${pad("-", widthItems - 1)}║`);
-      lines.push(`╠${dash(widthCategory)}╬${dash(widthItems)}╣`);
-      continue;
-    }
+    if (itemKeys.length === 0) continue;
 
-    let firstLine = true;
+    lines.push(cat.toUpperCase());
     for (const item of itemKeys) {
-      const amount = items[item];
-
-      // Punkte dynamisch berechnen
-      const dotsCount = widthItems - item.length - 4; // 4 = 1 space + x + max 2 digits
-      const dots = ".".repeat(dotsCount > 0 ? dotsCount : 0);
-      const itemLine = `${item}${dots} x${amount}`;
-
-      if (firstLine) {
-        lines.push(`║ ${pad(category.toUpperCase(), widthCategory - 1)}║ ${pad(itemLine, widthItems - 1)}║`);
-        firstLine = false;
-      } else {
-        lines.push(`║ ${pad("", widthCategory - 1)}║ ${pad(itemLine, widthItems - 1)}║`);
-      }
+      const amount = items[item].amount;
+      const value = items[item].value;
+      const amountStr = amount === "-" ? "-" : `x${amount}`;
+      // Dynamische Punkte
+      let dotsCount = 18 - item.length;
+      if(dotsCount < 1) dotsCount = 1;
+      const dots = ".".repeat(dotsCount);
+      const line = `  - ${padRight(item, 16)} ${dots} ${padRight(amountStr,5)} | Value: ${value.toLocaleString()}`;
+      lines.push(line);
     }
-    lines.push(`╠${dash(widthCategory)}╬${dash(widthItems)}╣`);
+    lines.push(""); // Leerzeile nach Kategorie
   }
 
-  // Footer
+  lines.push("─".repeat(lineLength));
   const now = new Date();
   const dateStr = `${String(now.getDate()).padStart(2,"0")}.${String(now.getMonth()+1).padStart(2,"0")}.${now.getFullYear()}`;
-  lines.push(`║ Last Updated: ${pad(dateStr, totalWidth - 15)}║`);
-  lines.push(`╚${dash(totalWidth)}╝`);
+  lines.push(`Last Updated: ${dateStr}`);
 
   return "```" + lines.join("\n") + "```";
 }
@@ -112,7 +94,6 @@ async function updateInventoryMessage(channel) {
 async function sendLog(channelId, action, user, item, amount, category) {
   const channel = await client.channels.fetch(channelId).catch(() => null);
   if (!channel) return;
-
   const timestamp = Math.floor(Date.now() / 1000);
   channel.send(`**${action.toUpperCase()}** | ${user.tag} | ${item} x${amount} | ${category} | <t:${timestamp}:R>`);
 }
@@ -127,15 +108,21 @@ const client = new Client({
   ]
 });
 
+// --- Ready ---
 client.once("ready", async () => {
   console.log("✅ Gang Bot is online!");
   const stashChannel = await client.channels.fetch(stashChannelId).catch(() => null);
   if (stashChannel) updateInventoryMessage(stashChannel);
 });
 
-// --- Commands ---
+// --- Commands & Auto-Delete Messages ---
 client.on("messageCreate", async message => {
   if (message.author.bot) return;
+
+  // --- Delete all messages in stash channel ---
+  if (message.channel.id === stashChannelId) {
+    message.delete().catch(()=>{});
+  }
 
   const commandRegex = /^!(deposit|withdraw)\s+(.+)$/i;
   const matchCommand = message.content.match(commandRegex);
@@ -152,7 +139,7 @@ client.on("messageCreate", async message => {
   }
 
   // Kategorie optional
-  let category = "Other";
+  let category = "Others";
   const categoryMatch = rest.match(/\(([^)]+)\)$/);
   if (categoryMatch) {
     category = categoryMatch[1].trim();
@@ -165,21 +152,21 @@ client.on("messageCreate", async message => {
   const amount = parseInt(amountMatch[1]);
 
   // Item = alles davor
-  const item = rest.slice(0, rest.lastIndexOf(amountMatch[1])).trim().toLowerCase();
+  const item = rest.slice(0, rest.lastIndexOf(amountMatch[1])).trim();
   if (!item || amount <= 0) return;
 
   // Load Inventory
   const inventory = loadInventory();
   if (!inventory[category]) inventory[category] = {};
-  if (!inventory[category][item]) inventory[category][item] = 0;
+  if (!inventory[category][item]) inventory[category][item] = {amount:0,value:0};
 
-  if (command === "deposit") inventory[category][item] += amount;
+  if (command === "deposit") inventory[category][item].amount += amount;
   else {
-    if (!inventory[category][item] || inventory[category][item] < amount) {
+    if (!inventory[category][item] || inventory[category][item].amount < amount) {
       return message.reply("❌ Not enough items!").then(msg => setTimeout(() => msg.delete().catch(()=>{}), 3000));
     }
-    inventory[category][item] -= amount;
-    if (inventory[category][item] === 0) delete inventory[category][item];
+    inventory[category][item].amount -= amount;
+    if (inventory[category][item].amount === 0) delete inventory[category][item];
   }
 
   saveInventory(inventory);
