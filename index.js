@@ -11,15 +11,15 @@ const allowedRoles = [
 ];
 
 // Channel IDs
-const stashChannelId = "1456489075941834949"; // Inventory display
-const depositLogChannelId = "1456726864134668359";
-const withdrawLogChannelId = "1456733883021267038";
+const stashChannelId = "YOUR_STASH_CHANNEL_ID"; // Inventory display
+const depositLogChannelId = "YOUR_DEPOSIT_LOG_CHANNEL_ID";
+const withdrawLogChannelId = "YOUR_WITHDRAW_LOG_CHANNEL_ID";
 
 // Inventory Datei
 const inventoryFile = "./inventory.json";
 let inventoryMessageId = null;
 
-// --- Lade / Speichere Inventory ---
+// --- Load / Save Inventory ---
 function loadInventory() {
   if (!fs.existsSync(inventoryFile)) return {};
   return JSON.parse(fs.readFileSync(inventoryFile));
@@ -49,11 +49,11 @@ function sendStashLog({ channel, action, user, item, amount, category }) {
   channel.send({ embeds: [embed] }).catch(() => {});
 }
 
-// --- Modernes Inventory Embed (Dashboard Style) ---
+// --- Modern Dashboard Inventory Embed ---
 function buildInventoryEmbed(inventory) {
   const embed = new EmbedBuilder()
-    .setTitle("💼 Gang Stash Inventory")
-    .setColor(0x1f1f1f)
+    .setTitle("Gang Stash Inventory")
+    .setColor(0x1f1f1f) // Clean dark theme
     .setFooter({ text: "Gang Inventory System" })
     .setTimestamp();
 
@@ -120,48 +120,49 @@ client.once("ready", async () => {
 client.on("messageCreate", async message => {
   if (message.author.bot) return;
 
-  const args = message.content.trim().split(" ");
-  const command = args.shift().toLowerCase();
+  const commandRegex = /^!(deposit|withdraw)\s+(.+)$/i;
+  const matchCommand = message.content.match(commandRegex);
+  if (!matchCommand) return;
 
-  if (!["!deposit", "!withdraw"].includes(command)) return;
+  const command = matchCommand[1].toLowerCase();
+  let rest = matchCommand[2].trim();
 
-  message.delete().catch(() => {});
-
-  if (args.length < 2) return;
-
-  // Amount
-  let amount = parseInt(args[args.length - 1]);
-  if (isNaN(amount) || amount <= 0) return;
-
-  // Prüfe Kategorie in Klammern
-  let itemRaw = args.slice(0, args.length - 1).join(" ");
-  let category = "Other"; // default
-
-  const match = itemRaw.match(/\(([^)]+)\)$/);
-  if (match) {
-    category = match[1].trim();
-    itemRaw = itemRaw.replace(/\([^)]+\)$/, "").trim();
+  // Kategorie optional am Ende
+  let category = "Other";
+  const categoryMatch = rest.match(/\(([^)]+)\)$/);
+  if (categoryMatch) {
+    category = categoryMatch[1].trim();
+    rest = rest.replace(/\([^)]+\)$/, "").trim();
   }
 
-  const item = itemRaw.toLowerCase();
+  // Amount = letzte Zahl
+  const amountMatch = rest.match(/(\d+)$/);
+  if (!amountMatch) return;
+  const amount = parseInt(amountMatch[1]);
 
-  // Role Check
+  // Item = alles davor
+  const item = rest.slice(0, rest.lastIndexOf(amountMatch[1])).trim().toLowerCase();
+
+  if (!item || amount <= 0) return;
+
+  // --- Rollen Check ---
   const hasRole = message.member.roles.cache.some(role => allowedRoles.includes(role.name));
   if (!hasRole) {
-    return message.reply("❌ You don’t have permission!").then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000));
+    return message.reply("❌ You don’t have permission!").then(msg => 
+      setTimeout(() => msg.delete().catch(()=>{}), 4000)
+    );
   }
 
-  // Lade Inventory
+  // Load inventory NUR wenn User die Role hat
   const inventory = loadInventory();
   if (!inventory[category]) inventory[category] = {};
   if (!inventory[category][item]) inventory[category][item] = 0;
 
   // Deposit / Withdraw
-  if (command === "!deposit") {
-    inventory[category][item] += amount;
-  } else if (command === "!withdraw") {
+  if (command === "deposit") inventory[category][item] += amount;
+  else {
     if (!inventory[category][item] || inventory[category][item] < amount) {
-      return message.reply("❌ Not enough items!").then(msg => setTimeout(() => msg.delete().catch(() => {}), 3000));
+      return message.reply("❌ Not enough items!").then(msg => setTimeout(() => msg.delete().catch(()=>{}),3000));
     }
     inventory[category][item] -= amount;
     if (inventory[category][item] === 0) delete inventory[category][item];
@@ -170,12 +171,12 @@ client.on("messageCreate", async message => {
   saveInventory(inventory);
 
   // Update Inventory Embed
-  const stashChannel = await client.channels.fetch(stashChannelId).catch(() => null);
+  const stashChannel = await client.channels.fetch(stashChannelId).catch(()=>null);
   if (stashChannel) updateInventoryMessage(stashChannel);
 
   // Logs
-  const logChannelId = command === "!deposit" ? depositLogChannelId : withdrawLogChannelId;
-  const logChannel = await client.channels.fetch(logChannelId).catch(() => null);
+  const logChannelId = command === "deposit" ? depositLogChannelId : withdrawLogChannelId;
+  const logChannel = await client.channels.fetch(logChannelId).catch(()=>null);
   sendStashLog({ channel: logChannel, action: command.toUpperCase(), user: message.author, item, amount, category });
 });
 
