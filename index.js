@@ -29,40 +29,32 @@ function saveInventory(data) {
   fs.writeFileSync(inventoryFile, JSON.stringify(data, null, 2));
 }
 
-// --- Modern Logs ---
+// --- Minimalistische Logs ---
 function sendStashLog({ channel, action, user, item, amount, category }) {
   if (!channel) return;
 
   const embed = new EmbedBuilder()
-    .setTitle("Gang Stash Log")
+    .setTitle(`${action === "DEPOSIT" ? "📥 Deposit" : "📤 Withdraw"}`)
     .setColor(action === "DEPOSIT" ? 0x2ecc71 : 0xe74c3c)
-    .addFields(
-      { name: "User", value: user.tag, inline: true },
-      { name: "Action", value: action, inline: true },
-      { name: "Item", value: item, inline: true },
-      { name: "Amount", value: amount.toString(), inline: true },
-      { name: "Category", value: category, inline: true },
-      { name: "Time", value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true }
-    )
-    .setFooter({ text: "Gang Control System" });
+    .setDescription(`**User:** ${user.tag}\n**Item:** ${item}\n**Amount:** ${amount}\n**Category:** ${category}\n**Time:** <t:${Math.floor(Date.now() / 1000)}:R>`)
+    .setFooter({ text: "Gang Logs" });
 
   channel.send({ embeds: [embed] }).catch(() => {});
 }
 
-// --- Modern Gang Stash Inventory Embed (NEUES DESIGN) ---
+// --- Richtig große Gang Stash Inventory ---
 function buildInventoryEmbed(inventory) {
   const embed = new EmbedBuilder()
     .setTitle("💎 GANG STASH INVENTORY 💎")
-    .setColor(0x0f0f0f)
+    .setColor(0x111111)
     .setFooter({ text: "Gang Inventory System" })
     .setTimestamp();
 
-  // Farben pro Kategorie
   const categories = [
-    { name: "Weapons", color: 0xe74c3c },  // rot
-    { name: "Drugs", color: 0x2ecc71 },    // grün
-    { name: "Materials", color: 0x3498db },// blau
-    { name: "Other", color: 0x95a5a6 }     // grau
+    { name: "Weapons", color: 0xe74c3c },
+    { name: "Drugs", color: 0x2ecc71 },
+    { name: "Materials", color: 0x3498db },
+    { name: "Other", color: 0x95a5a6 }
   ];
 
   for (const cat of categories) {
@@ -78,7 +70,7 @@ function buildInventoryEmbed(inventory) {
       }
     }
 
-    embed.addFields({ name: cat.name, value: value, inline: true });
+    embed.addFields({ name: `🟢 ${cat.name}`, value: value, inline: true });
   }
 
   return embed;
