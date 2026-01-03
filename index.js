@@ -48,21 +48,37 @@ function sendStashLog({ channel, action, user, item, amount }) {
   channel.send({ embeds: [embed] }).catch(() => {});
 }
 
-// --- Inventory Embed with Categories ---
+// --- Modern Dashboard Inventory Embed ---
 function buildInventoryEmbed(inventory) {
   const embed = new EmbedBuilder()
-    .setTitle("Gang Stash Inventory")
-    .setColor(0x2f3136)
+    .setTitle("💼 Gang Stash Inventory")
+    .setColor(0x1f1f1f) // Dark theme
     .setFooter({ text: "Gang Inventory System" })
     .setTimestamp();
 
-  for (const [category, items] of Object.entries(inventory)) {
+  // Fixed category order
+  const categoryOrder = ["Weapons", "Drugs", "Materials", "Other"];
+
+  for (const category of categoryOrder) {
+    if (!inventory[category]) continue;
+
+    const items = inventory[category];
     let value = "";
-    for (const [item, amount] of Object.entries(items)) {
-      value += `${item} × ${amount}\n`;
+
+    // Sort by amount descending
+    const sortedItems = Object.entries(items).sort((a, b) => b[1] - a[1]);
+
+    for (const [item, amount] of sortedItems) {
+      value += `\`${item}\` × ${amount}\n`;
     }
+
     if (value === "") value = "—";
-    embed.addFields({ name: category, value: value, inline: true });
+
+    embed.addFields({
+      name: category,
+      value: value,
+      inline: true
+    });
   }
 
   return embed;
