@@ -1,7 +1,7 @@
 const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
 const fs = require("fs");
 
-// Rollen, die Commands benutzen dürfen
+// === Rollen, die Commands benutzen dürfen ===
 const allowedRoles = [
   "Two Bar",
   "One Bar",
@@ -10,12 +10,12 @@ const allowedRoles = [
   "One Stripe"
 ];
 
-// Channel IDs
-const stashChannelId = "1456489075941834949"; // Inventory display
+// === Channel IDs ===
+const stashChannelId = "1456489075941834949"; // Inventory Embed
 const depositLogChannelId = "1456726864134668359";
 const withdrawLogChannelId = "1456733883021267038";
 
-// Inventory Datei
+// === Inventory Datei ===
 const inventoryFile = "./inventory.json";
 let inventoryMessageId = null;
 
@@ -49,11 +49,11 @@ function sendStashLog({ channel, action, user, item, amount, category }) {
   channel.send({ embeds: [embed] }).catch(() => {});
 }
 
-// --- Modern Dashboard Inventory Embed ---
+// --- Modern Gang Stash Inventory Embed ---
 function buildInventoryEmbed(inventory) {
   const embed = new EmbedBuilder()
     .setTitle("Gang Stash Inventory")
-    .setColor(0x1f1f1f) // Clean dark theme
+    .setColor(0x1f1f1f)
     .setFooter({ text: "Gang Inventory System" })
     .setTimestamp();
 
@@ -145,24 +145,25 @@ client.on("messageCreate", async message => {
 
   if (!item || amount <= 0) return;
 
-  // --- Rollen Check ---
+  // --- Rollen Check vor allem ---
   const hasRole = message.member.roles.cache.some(role => allowedRoles.includes(role.name));
   if (!hasRole) {
-    return message.reply("❌ You don’t have permission!").then(msg => 
-      setTimeout(() => msg.delete().catch(()=>{}), 4000)
+    return message.reply("❌ You don’t have permission!").then(msg =>
+      setTimeout(() => msg.delete().catch(() => {}), 4000)
     );
   }
 
-  // Load inventory NUR wenn User die Role hat
+  // --- Inventory bearbeiten ---
   const inventory = loadInventory();
   if (!inventory[category]) inventory[category] = {};
   if (!inventory[category][item]) inventory[category][item] = 0;
 
-  // Deposit / Withdraw
   if (command === "deposit") inventory[category][item] += amount;
   else {
     if (!inventory[category][item] || inventory[category][item] < amount) {
-      return message.reply("❌ Not enough items!").then(msg => setTimeout(() => msg.delete().catch(()=>{}),3000));
+      return message.reply("❌ Not enough items!").then(msg =>
+        setTimeout(() => msg.delete().catch(() => {}), 3000)
+      );
     }
     inventory[category][item] -= amount;
     if (inventory[category][item] === 0) delete inventory[category][item];
@@ -170,14 +171,17 @@ client.on("messageCreate", async message => {
 
   saveInventory(inventory);
 
-  // Update Inventory Embed
-  const stashChannel = await client.channels.fetch(stashChannelId).catch(()=>null);
+  // --- Update Inventory Embed ---
+  const stashChannel = await client.channels.fetch(stashChannelId).catch(() => null);
   if (stashChannel) updateInventoryMessage(stashChannel);
 
-  // Logs
+  // --- Logs ---
   const logChannelId = command === "deposit" ? depositLogChannelId : withdrawLogChannelId;
-  const logChannel = await client.channels.fetch(logChannelId).catch(()=>null);
+  const logChannel = await client.channels.fetch(logChannelId).catch(() => null);
   sendStashLog({ channel: logChannel, action: command.toUpperCase(), user: message.author, item, amount, category });
+
+  // --- Command Nachricht löschen ---
+  message.delete().catch(() => {});
 });
 
 // --- Login ---
