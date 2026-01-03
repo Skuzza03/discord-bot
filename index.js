@@ -1,7 +1,7 @@
 const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
 const fs = require("fs");
 
-// === Rollen, die Commands benutzen dürfen ===
+// === Rollen die Commands benutzen dürfen ===
 const allowedRoles = [
   "Two Bar",
   "One Bar",
@@ -11,7 +11,7 @@ const allowedRoles = [
 ];
 
 // === Channel IDs ===
-const stashChannelId = "1456489075941834949"; // Inventory Embed
+const stashChannelId = "1456489075941834949";
 const depositLogChannelId = "1456726864134668359";
 const withdrawLogChannelId = "1456733883021267038";
 
@@ -133,7 +133,7 @@ client.on("messageCreate", async message => {
     await message.reply("❌ You don’t have permission!").then(msg =>
       setTimeout(() => msg.delete().catch(() => {}), 4000)
     );
-    return message.delete().catch(() => {}); // Command Nachricht löschen
+    return message.delete().catch(() => {});
   }
 
   // --- Kategorie optional ---
@@ -142,6 +142,16 @@ client.on("messageCreate", async message => {
   if (categoryMatch) {
     category = categoryMatch[1].trim();
     rest = rest.replace(/\([^)]+\)$/, "").trim();
+  } else {
+    // Wenn kein Klammern: letzte Wort als Kategorie prüfen
+    const parts = rest.split(" ");
+    const lastWord = parts[parts.length - 1].toLowerCase();
+    const validCategories = ["weapons", "drugs", "materials"];
+    if (validCategories.includes(lastWord)) {
+      category = lastWord[0].toUpperCase() + lastWord.slice(1); // Formatieren
+      parts.pop();
+      rest = parts.join(" ");
+    }
   }
 
   // --- Amount = letzte Zahl ---
