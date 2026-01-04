@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, Events } = require('discord.js');
+const { Client, GatewayIntentBits, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, EmbedBuilder, Events } = require('discord.js');
 const fs = require('fs');
 
 const client = new Client({
@@ -80,7 +80,7 @@ async function updateInventoryMessage(channel) {
     }
 }
 
-// --- Modern Embed Logs ---
+// --- Logs ---
 async function sendLog(channelId, action, user, item, qty, category) {
     const channel = await client.channels.fetch(channelId).catch(()=>null);
     if (!channel) return;
@@ -106,107 +106,49 @@ client.once('ready', async () => {
     if (stashChannel) updateInventoryMessage(stashChannel);
 });
 
-// --- Menu Command ---
+// --- Deposit / Withdraw Commands ---
 client.on('messageCreate', async message => {
     if (message.author.bot) return;
 
-    if (!message.content.startsWith('!deposit menu') && !message.content.startsWith('!withdraw menu')) return;
+    if (!message.content.startsWith('!deposit') && !message.content.startsWith('!withdraw')) return;
+
+    const action = message.content.startsWith('!deposit') ? 'deposit' : 'withdraw';
 
     // Rollencheck
     const hasRole = message.member.roles.cache.some(r => allowedRoles.includes(r.name));
     if (!hasRole) {
-        await message.reply("❌ You don’t have permission!").then(msg => setTimeout(()=>msg.delete().catch(()=>{}),4000));
+        await message.reply({ content: "❌ You don’t have permission!", ephemeral: true }).then(msg => setTimeout(()=>msg.delete().catch(()=>{}),4000));
         return message.delete().catch(()=>{});
     }
 
-    const action = message.content.startsWith('!deposit') ? "deposit" : "withdraw";
-
-    // Kategorie Dropdown
-    const row = new ActionRowBuilder()
-        .addComponents(
-            new StringSelectMenuBuilder()
-                .setCustomId(`selectCategory_${action}`)
-                .setPlaceholder('Select Category')
-                .addOptions([
-                    { label: 'Weapons', value: 'Weapons' },
-                    { label: 'Drugs', value: 'Drugs' },
-                    { label: 'Materials', value: 'Materials' },
-                    { label: 'Others', value: 'Others' },
-                ])
-        );
-
-    await message.channel.send({ content: `Select category for ${action}:`, components: [row] });
-    message.delete().catch(()=>{});
-});
-
-// --- Interaction Handling for Category + Item + Quantity ---
-client.on(Events.InteractionCreate, async interaction => {
-    // --- Kategorie Dropdown ---
-    if (interaction.isStringSelectMenu()) {
-        const [type, action] = interaction.customId.split('_'); 
-        if (type !== "selectCategory") return;
-
-        const category = interaction.values[0];
-
-        // Prompt wird sofort gelöscht nach Eingabe
-        const promptMsg = await interaction.update({ content: `Type the item name you want to ${action} in **${category}**:`, components: [] });
-
-        const filter = m => m.author.id === interaction.user.id;
-        const collector = interaction.channel.createMessageCollector({ filter, time: 30000, max: 1 });
-
-        collector.on('collect', async m => {
-            const itemName = m.content.trim();
-            if (!itemName) return;
-
-            m.delete().catch(()=>{});
-            promptMsg.delete().catch(()=>{});
-
-            const row = new ActionRowBuilder()
-                .addComponents([
-                    new ButtonBuilder().setCustomId(`qty1_${action}_${category}_${itemName}`).setLabel('1').setStyle(ButtonStyle.Primary),
-                    new ButtonBuilder().setCustomId(`qty5_${action}_${category}_${itemName}`).setLabel('5').setStyle(ButtonStyle.Primary),
-                    new ButtonBuilder().setCustomId(`qty10_${action}_${category}_${itemName}`).setLabel('10').setStyle(ButtonStyle.Primary),
-                    new ButtonBuilder().setCustomId(`custom_${action}_${category}_${itemName}`).setLabel('Custom').setStyle(ButtonStyle.Secondary),
-                ]);
-
-            const qtyPrompt = await interaction.channel.send({ content: `Select quantity for **${itemName}**:`, components: [row] });
-
-            const buttonFilter = i => i.user.id === interaction.user.id;
-            const collectorBtn = qtyPrompt.createMessageComponentCollector({ filter: buttonFilter, time: 60000 });
-
-            collectorBtn.on('collect', async i => {
-                await i.message.delete().catch(()=>{});
-                const [qtyStr, actionBtn, categoryBtn, itemBtn] = i.customId.split('_');
-
-                if (qtyStr === 'custom') {
-                    const customMsg = await interaction.channel.send(`${i.user}, type the quantity for **${itemBtn}** (${categoryBtn}):`);
-                    const customCollector = interaction.channel.createMessageCollector({ filter: m => m.author.id === i.user.id, max: 1, time: 30000 });
-                    customCollector.on('collect', async m => {
-                        const qty = parseInt(m.content);
-                        m.delete().catch(()=>{});
-                        customMsg.delete().catch(()=>{});
-                        await handleInventoryUpdate(actionBtn, categoryBtn, itemBtn, qty, i);
-                    });
-                } else {
-                    const qty = parseInt(qtyStr.replace('qty',''));
-                    await handleInventoryUpdate(actionBtn, categoryBtn, itemBtn, qty, i);
-                }
-            });
-        });
+    const args = message.content.split(' ').slice(1); // alles nach !deposit / !withdraw
+    if (args.length < 2) {
+        await message.reply({ content: `Usage: !${action} <item> <quantity> (<category>)`, ephemeral: true });
+        return message.delete().catch(()=>{});
     }
-});
 
-// --- Inventory Update Function ---
-async function handleInventoryUpdate(action, category, item, qty, interaction) {
+    let item = args[0];
+    let qty = parseInt(args[1]);
+    if (isNaN(qty) || qty <= 0) {
+        await message.reply({ content: "❌ Invalid quantity!", ephemeral: true });
+        return message.delete().catch(()=>{});
+    }
+
+    let category = args[2] || 'Others';
+    category = category.replace(/[()]/g,''); // Klammern entfernen
+    const validCategories = ["Weapons","Drugs","Materials","Others"];
+    if (!validCategories.includes(category)) category = 'Others';
+
+    // Inventory update
     const inventory = loadInventory();
-
     if (!inventory[category]) inventory[category] = {};
     if (!inventory[category][item]) inventory[category][item] = 0;
 
     if (action === 'deposit') inventory[category][item] += qty;
-    else if (action === 'withdraw') {
-        if (!inventory[category][item] || inventory[category][item] < qty) {
-            return interaction.followUp({ content:"❌ Not enough items!", ephemeral:true });
+    else {
+        if (inventory[category][item] < qty) {
+            await message.reply({ content: "❌ Not enough items!", ephemeral:true });
+            return message.delete().catch(()=>{});
         }
         inventory[category][item] -= qty;
         if (inventory[category][item] === 0) delete inventory[category][item];
@@ -218,10 +160,12 @@ async function handleInventoryUpdate(action, category, item, qty, interaction) {
     if (stashChannel) updateInventoryMessage(stashChannel);
 
     const logChannelId = action === 'deposit' ? depositLogChannelId : withdrawLogChannelId;
-    sendLog(logChannelId, action, interaction.user, item, qty, category);
+    sendLog(logChannelId, action, message.author, item, qty, category);
 
-    await interaction.followUp({ content: `✅ ${action} ${qty}x ${item} (${category}) successful!`, ephemeral: true });
-}
+    // ephemeral success
+    await message.reply({ content: `✅ ${action} ${qty}x ${item} (${category}) successful!`, ephemeral:true });
+    message.delete().catch(()=>{});
+});
 
 // --- Login ---
 client.login(process.env.TOKEN);
