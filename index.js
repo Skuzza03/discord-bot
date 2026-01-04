@@ -13,7 +13,7 @@ const client = new Client({
 
 /* ================== CONFIG ================== */
 
-// Rollen die den Stash benutzen dürfen
+// Rollen für Stash
 const allowedRoles = [
     "Two Bar",
     "One Bar",
@@ -23,12 +23,12 @@ const allowedRoles = [
 ];
 
 // Channels
-const stashChannelId = "1456489075941834949";
-const depositLogChannelId = "1456726864134668359";
-const withdrawLogChannelId = "1456733883021267038";
+const stashChannelId = "STASH_CHANNEL_ID";
+const depositLogChannelId = "DEPOSIT_LOG_CHANNEL_ID";
+const withdrawLogChannelId = "WITHDRAW_LOG_CHANNEL_ID";
 
-const workReportChannelId = "1457408055833657364"; // echte ID einfügen
-const workStatsChannelId = "1457408149899317349"; // echte ID einfügen
+const workReportChannelId = "1457408055833657364"; // WorkReports Channel
+const workStatsChannelId = "1457408149899317349";     // WorkStats Channel für Leader
 
 // Dateien
 const inventoryFile = "./inventory.json";
@@ -36,7 +36,7 @@ const workFile = path.join(__dirname, "workStats.json");
 
 /* ============================================ */
 
-// --- Inventory ---
+// --- INVENTORY FUNCTIONS ---
 function loadInventory() {
     if (!fs.existsSync(inventoryFile)) return {};
     return JSON.parse(fs.readFileSync(inventoryFile, "utf8"));
@@ -49,22 +49,18 @@ function saveInventory(data) {
 function buildStashText(inventory) {
     const categories = ["Weapons", "Drugs", "Materials", "Others"];
     let text = `PINKPANTHER STASH\n──────────────────────────────\n\n`;
-
     for (const cat of categories) {
         text += `${cat.toUpperCase()}\n`;
         const items = inventory[cat] || {};
-
         if (Object.keys(items).length === 0) {
             text += "  - (Empty)\n\n";
             continue;
         }
-
         for (const [item, qty] of Object.entries(items)) {
             text += `  - ${item} x${qty}\n`;
         }
         text += "\n";
     }
-
     return "```" + text + "```";
 }
 
@@ -99,7 +95,7 @@ async function sendLog(channelId, type, user, item, qty, category) {
     channel.send({ embeds: [embed] });
 }
 
-// --- WorkStats ---
+// --- WORK STATS FUNCTIONS ---
 function loadWorkStats() {
     if (!fs.existsSync(workFile)) return {};
     return JSON.parse(fs.readFileSync(workFile, "utf8"));
@@ -109,11 +105,10 @@ function saveWorkStats(data) {
     fs.writeFileSync(workFile, JSON.stringify(data, null, 2));
 }
 
-function findMember(guild, name) {
-    name = name.toLowerCase();
-    return guild.members.cache.find(
-        m => m.user.username.toLowerCase().includes(name) || m.displayName.toLowerCase().includes(name)
-    );
+// Format time
+function formatTime(ts) {
+    const d = new Date(ts);
+    return `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getFullYear()} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
 }
 
 // --- READY ---
@@ -124,185 +119,188 @@ client.once("ready", async () => {
 });
 
 // --- MESSAGE HANDLER ---
-client.on("messageCreate", async (message) => {
+client.on("messageCreate", async message => {
     if (message.author.bot) return;
 
-    // ================= STASH =================
-    if (message.channel.id === stashChannelId) {
-        if (message.content.toLowerCase() === "!help") {
-            return message.channel.send(
-                "```DEPOSIT: item qty W/D/M/O\nWITHDRAW: -item qty W/D/M/O```"
-            );
-        }
-
-        const hasRole = message.member.roles.cache.some(r => allowedRoles.includes(r.name));
-        if (!hasRole) return;
-
-        const match = message.content.match(/^(-?)(\S+)\s+(\d+)(?:\s+([WDMO]))?$/i);
-        if (!match) return;
-
-        const isWithdraw = match[1] === "-";
-        const item = match[2];
-        const qty = parseInt(match[3]);
-        const catMap = { W: "Weapons", D: "Drugs", M: "Materials", O: "Others" };
-        const category = catMap[(match[4] || "O").toUpperCase()];
-
-        const inventory = loadInventory();
-        if (!inventory[category]) inventory[category] = {};
-        if (!inventory[category][item]) inventory[category][item] = 0;
-
-        if (isWithdraw) {
-            if (inventory[category][item] < qty) {
-                return message.reply("❌ Not enough items!");
-            }
-            inventory[category][item] -= qty;
-            if (inventory[category][item] === 0) delete inventory[category][item];
-        } else {
-            inventory[category][item] += qty;
-        }
-
-        saveInventory(inventory);
-        const stashChannel = await client.channels.fetch(stashChannelId);
-        updateStash(stashChannel);
-
-        sendLog(
-            isWithdraw ? withdrawLogChannelId : depositLogChannelId,
-            isWithdraw ? "withdraw" : "deposit",
-            message.author,
-            item,
-            qty,
-            category
-        );
-
-        message.delete().catch(() => {});
-        return;
-    }
-
-    // ================= WORKREPORTS =================
+    // === WORK REPORT CHANNEL ===
     if (message.channel.id === workReportChannelId) {
+
+        // Help message
         if (message.content.toLowerCase() === "!help") {
             const embed = new EmbedBuilder()
-                .setTitle("WorkReports Guide")
-                .setDescription(`
-**WorkReports Commands**
-- \`+<number> <item>\` → Add items worked (example: +1 diving)
-- \`<number> <item>\` → Same as above (example: 1 diving)
-                `)
-                .setColor(0x00ff99)
-                .setTimestamp();
-            message.channel.send({ embeds: [embed] }).then(() => message.delete().catch(() => {}));
+                .setTitle("WorkReports & WorkStats Guide")
+                .setDescription(
+`**WorkReports Commands**
+\`+<number> <item>\` → Add items worked (example: +1 diving)
+\`<number> <item>\` → Same as above (example: 1 diving)
+\`!stats <member>\` → Show stats for a member
+\`!res <member>\` → Reset stats for a member
+\`!top3\` → Show top 3 workers`
+                )
+                .setColor(0x1abc9c);
+            message.channel.send({ embeds: [embed] });
             return;
         }
 
-        const match = message.content.match(/^([+-]?\d+)\s*(\w+)/i);
-        if (!match) return;
+        const workMatch = message.content.match(/^\+?(\d+)\s+(\S+)$/i);
+        if (!workMatch) return;
 
-        const qty = parseInt(match[1].replace("+", ""));
-        const item = match[2].toLowerCase();
+        const qty = parseInt(workMatch[1]);
+        const item = workMatch[2].toLowerCase();
+        const userId = message.author.id;
 
-        const stats = loadWorkStats();
-        if (!stats[message.author.id]) stats[message.author.id] = {};
-        if (!stats[message.author.id][item]) stats[message.author.id][item] = 0;
+        let data = loadWorkStats();
+        if (!data[userId]) data[userId] = [];
+        data[userId].push({ item, qty, time: Date.now() });
+        saveWorkStats(data);
 
-        stats[message.author.id][item] += qty;
-        saveWorkStats(stats);
-
+        // Nachricht löschen
         message.delete().catch(() => {});
         return;
     }
 
-    // ================= WORKSTATS =================
+    // === WORK STATS CHANNEL (LEADERS) ===
     if (message.channel.id === workStatsChannelId) {
+        const args = message.content.trim().split(/\s+/);
+        const cmd = args[0].toLowerCase();
+        const data = loadWorkStats();
 
-        if (message.content.toLowerCase() === "!help") {
+        // !help
+        if (cmd === "!help") {
             const embed = new EmbedBuilder()
-                .setTitle("WorkStats Guide (Leaders Only)")
-                .setDescription(`
-**WorkStats Commands**
-- \`!stats <member>\` → Show stats for a member
-- \`!res <member>\` → Reset stats for a member
-- \`!top3\` → Show top 3 workers
-                `)
-                .setColor(0xff9900)
-                .setTimestamp();
-            message.channel.send({ embeds: [embed] }).then(() => message.delete().catch(() => {}));
+                .setTitle("WorkReports & WorkStats Guide (Leaders)")
+                .setDescription(
+`**WorkStats Commands**
+\`!stats <member>\` → Show stats for a member
+\`!res <member>\` → Reset stats for a member
+\`!top3\` → Show top 3 workers`
+                )
+                .setColor(0x1abc9c);
+            message.channel.send({ embeds: [embed] });
             return;
         }
 
-        const args = message.content.split(" ").slice(1);
+        // --- !stats <member>
+        if (cmd === "!stats" && args[1]) {
+            const memberName = args[1].toLowerCase();
+            const guild = message.guild;
+            const member = guild.members.cache.find(m => m.user.username.toLowerCase() === memberName || m.user.tag.toLowerCase().startsWith(memberName));
+            if (!member) return message.reply("❌ Member not found.").then(msg => setTimeout(()=>msg.delete(),5000));
 
-        // --- !stats ---
-        if (message.content.toLowerCase().startsWith("!stats")) {
-            if (!args.length) return message.reply("❌ Please provide a member name.");
-            const memberName = args.join(" ");
-            const member = findMember(message.guild, memberName);
-            if (!member) return message.reply("❌ Member not found.");
-
-            const stats = loadWorkStats();
-            const data = stats[member.id];
-            if (!data) return message.reply(`No reports for ${member.displayName} in the last 7 days.`);
-
-            let text = `Work stats for ${member.displayName}:\n`;
-            for (const [item, qty] of Object.entries(data)) {
-                text += `- ${item}: ${qty}\n`;
-            }
-
-            const embed = new EmbedBuilder()
-                .setTitle(`Stats: ${member.displayName}`)
-                .setDescription(text)
-                .setColor(0x00ff99)
-                .setTimestamp();
-
-            message.channel.send({ embeds: [embed] }).then(() => message.delete().catch(() => {}));
-            return;
-        }
-
-        // --- !res ---
-        if (message.content.toLowerCase().startsWith("!res")) {
-            if (!args.length) return message.reply("❌ Provide a member name.");
-            const memberName = args.join(" ");
-            const member = findMember(message.guild, memberName);
-            if (!member) return message.reply("❌ Member not found.");
-
-            const stats = loadWorkStats();
-            stats[member.id] = {};
-            saveWorkStats(stats);
-
-            message.channel.send(`✅ Reset stats for ${member.displayName}`)
-                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 3000));
-            message.delete().catch(() => {});
-            return;
-        }
-
-        // --- !top3 ---
-        if (message.content.toLowerCase().startsWith("!top3")) {
-            const stats = loadWorkStats();
-            const ranking = Object.entries(stats)
-                .map(([id, items]) => {
-                    const total = Object.values(items).reduce((a, b) => a + b, 0);
-                    const member = message.guild.members.cache.get(id);
-                    return { member, total };
-                })
-                .filter(r => r.member)
-                .sort((a, b) => b.total - a.total)
-                .slice(0, 3);
+            const entries = data[member.id] || [];
+            if (!entries.length) return message.reply(`No reports for ${member.user.username} in the last 7 days.`).then(msg => setTimeout(()=>msg.delete(),5000));
 
             let text = "";
-            ranking.forEach((r, i) => {
-                text += `${i + 1}. ${r.member.displayName}: ${r.total}\n`;
-            });
+            const sevenDaysAgo = Date.now() - 7*24*60*60*1000;
+            for (const e of entries) {
+                if (e.time >= sevenDaysAgo) {
+                    text += `${e.qty} ${e.item} → ${formatTime(e.time)}\n`;
+                }
+            }
+            const embed = new EmbedBuilder()
+                .setTitle(`Stats: ${member.user.username}`)
+                .setDescription(text)
+                .setColor(0x3498db);
+            message.channel.send({ embeds: [embed] }).then(msg => setTimeout(()=>msg.delete(),15000));
+            message.delete().catch(()=>{});
+            return;
+        }
+
+        // --- !res <member>
+        if (cmd === "!res" && args[1]) {
+            const memberName = args[1].toLowerCase();
+            const guild = message.guild;
+            const member = guild.members.cache.find(m => m.user.username.toLowerCase() === memberName || m.user.tag.toLowerCase().startsWith(memberName));
+            if (!member) return message.reply("❌ Member not found.").then(msg => setTimeout(()=>msg.delete(),5000));
+
+            data[member.id] = [];
+            saveWorkStats(data);
 
             const embed = new EmbedBuilder()
-                .setTitle("Top 3 Workers")
-                .setDescription(text || "No stats yet.")
-                .setColor(0xffaa00)
-                .setTimestamp(); // zeigt automatisch "Today at ..." in Discord
+                .setTitle("✅ Reset stats")
+                .setDescription(`Stats for ${member.user.username} have been reset.\nTime: ${formatTime(Date.now())}`)
+                .setColor(0xe67e22);
+            message.channel.send({ embeds: [embed] }).then(msg => setTimeout(()=>msg.delete(),10000));
+            message.delete().catch(()=>{});
+            return;
+        }
 
-            message.channel.send({ embeds: [embed] }).then(() => message.delete().catch(() => {}));
+        // --- !top3
+        if (cmd === "!top3") {
+            let totals = [];
+            for (const [id, entries] of Object.entries(data)) {
+                let sum = 0;
+                for (const e of entries) sum += e.qty;
+                if (sum>0) totals.push({ id, sum, lastTime: entries[entries.length-1].time });
+            }
+            totals.sort((a,b)=>b.sum - a.sum);
+            const top = totals.slice(0,3);
+
+            let text = "";
+            for (const t of top) {
+                const member = await message.guild.members.fetch(t.id).catch(()=>null);
+                if (!member) continue;
+                text += `${member.user.username}: ${t.sum} → ${formatTime(t.lastTime)}\n`;
+            }
+            const embed = new EmbedBuilder()
+                .setTitle("Top 3 Workers")
+                .setDescription(text || "No data")
+                .setColor(0xf1c40f);
+            message.channel.send({ embeds: [embed] }).then(msg => setTimeout(()=>msg.delete(),15000));
+            message.delete().catch(()=>{});
             return;
         }
     }
+
+    // === STASH CHANNEL HANDLER ===
+    if (message.channel.id !== stashChannelId) return;
+
+    if (message.content.toLowerCase() === "!help") {
+        return message.channel.send(
+            "```DEPOSIT: item qty W/D/M/O\nWITHDRAW: -item qty W/D/M/O```"
+        );
+    }
+
+    const hasRole = message.member.roles.cache.some(r => allowedRoles.includes(r.name));
+    if (!hasRole) return;
+
+    const match = message.content.match(/^(-?)(\S+)\s+(\d+)(?:\s+([WDMO]))?$/i);
+    if (!match) return;
+
+    const isWithdraw = match[1] === "-";
+    const item = match[2];
+    const qty = parseInt(match[3]);
+    const catMap = { W: "Weapons", D: "Drugs", M: "Materials", O: "Others" };
+    const category = catMap[(match[4] || "O").toUpperCase()];
+
+    const inventory = loadInventory();
+    if (!inventory[category]) inventory[category] = {};
+    if (!inventory[category][item]) inventory[category][item] = 0;
+
+    if (isWithdraw) {
+        if (inventory[category][item] < qty) return message.reply("❌ Not enough items!");
+        inventory[category][item] -= qty;
+        if (inventory[category][item] === 0) delete inventory[category][item];
+    } else {
+        inventory[category][item] += qty;
+    }
+
+    saveInventory(inventory);
+
+    const stashChannel = await client.channels.fetch(stashChannelId);
+    updateStash(stashChannel);
+
+    sendLog(
+        isWithdraw ? withdrawLogChannelId : depositLogChannelId,
+        isWithdraw ? "withdraw" : "deposit",
+        message.author,
+        item,
+        qty,
+        category
+    );
+
+    message.delete().catch(() => {});
 });
 
-// ================= LOGIN =================
+// --- LOGIN ---
 client.login(process.env.TOKEN);
