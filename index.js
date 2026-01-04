@@ -134,54 +134,40 @@ client.on('messageCreate', async message => {
     message.delete().catch(()=>{});
 });
 
-// --- Interaction Handling ---
+// --- Interaction Handling for Category ---
 client.on(Events.InteractionCreate, async interaction => {
     if (!interaction.isStringSelectMenu()) return;
 
     const [type, action] = interaction.customId.split('_'); // selectCategory_deposit
+    if (type !== "selectCategory") return;
+
     const category = interaction.values[0];
-    const inventory = loadInventory();
-    if (!inventory[category]) inventory[category] = {};
 
-    // Beispiel Items (du kannst erweitern)
-    const itemsByCategory = {
-        Weapons: ["Pistol","SMG","Knife"],
-        Drugs: ["Marijuana","Cocaine","Weed"],
-        Materials: ["Steel","Wood"],
-        Others: ["Cash","Jewelry"]
-    };
+    // Bot fragt Itemname im Chat
+    await interaction.update({ content: `Type the item name you want to ${action} in **${category}**:`, components: [] });
 
-    const row = new ActionRowBuilder()
-        .addComponents(
-            new StringSelectMenuBuilder()
-                .setCustomId(`selectItem_${action}_${category}`)
-                .setPlaceholder('Select Item')
-                .addOptions(itemsByCategory[category].map(i=>({ label:i, value:i })))
-        );
+    // Message Collector für Itemname
+    const filter = m => m.author.id === interaction.user.id;
+    const collector = interaction.channel.createMessageCollector({ filter, time: 30000, max: 1 });
 
-    await interaction.update({ content: `Select item in ${category}:`, components: [row] });
+    collector.on('collect', async m => {
+        const itemName = m.content.trim();
+        if (!itemName) return;
+
+        // Buttons für Menge
+        const row = new ActionRowBuilder()
+            .addComponents([
+                new ButtonBuilder().setCustomId(`qty1_${action}_${category}_${itemName}`).setLabel('1').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`qty5_${action}_${category}_${itemName}`).setLabel('5').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`qty10_${action}_${category}_${itemName}`).setLabel('10').setStyle(ButtonStyle.Primary),
+            ]);
+
+        await interaction.channel.send({ content: `Select quantity for **${itemName}**:`, components: [row] });
+        m.delete().catch(()=>{});
+    });
 });
 
-client.on(Events.InteractionCreate, async interaction => {
-    if (!interaction.isStringSelectMenu()) return;
-
-    const idParts = interaction.customId.split('_'); 
-    if (idParts[0] !== 'selectItem') return;
-    const action = idParts[1]; // deposit / withdraw
-    const category = idParts[2];
-    const item = interaction.values[0];
-
-    const row = new ActionRowBuilder()
-        .addComponents([
-            new ButtonBuilder().setCustomId(`qty1_${action}_${category}_${item}`).setLabel('1').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`qty5_${action}_${category}_${item}`).setLabel('5').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`qty10_${action}_${category}_${item}`).setLabel('10').setStyle(ButtonStyle.Primary)
-        ]);
-
-    await interaction.update({ content: `Select quantity for ${item}:`, components: [row] });
-});
-
-// --- Button Handling ---
+// --- Button Handling for Quantity ---
 client.on(Events.InteractionCreate, async interaction => {
     if (!interaction.isButton()) return;
 
