@@ -1,5 +1,6 @@
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const fs = require('fs');
+const path = require('path'); // für Work-Reports
 
 const client = new Client({
     intents: [
@@ -29,57 +30,51 @@ const withdrawLogChannelId = "1456733883021267038";
 // Inventory Datei
 const inventoryFile = "./inventory.json";
 
-/* ============================================ */
+// Work Reports
+const workInputChannelId = "WORKREPORTS_CHANNEL_ID"; // hier posten Mitglieder
+const workStatsChannelId = "WORKSTATS_CHANNEL_ID";   // hier posten Leader die Stats
+const leaderRoles = ["Two Bar", "One Bar"];          // wer !stats benutzen darf
+const workFile = path.join(__dirname, "workStats.json");
 
-// Inventory laden
+/* ================== STASH BOT HELPERS ================== */
 function loadInventory() {
     if (!fs.existsSync(inventoryFile)) return {};
     return JSON.parse(fs.readFileSync(inventoryFile, "utf8"));
 }
 
-// Inventory speichern
 function saveInventory(data) {
     fs.writeFileSync(inventoryFile, JSON.stringify(data, null, 2));
 }
 
-// Stash Anzeige
 function buildStashText(inventory) {
     const categories = ["Weapons", "Drugs", "Materials", "Others"];
     let text = `PINKPANTHER STASH\n──────────────────────────────\n\n`;
-
     for (const cat of categories) {
         text += `${cat.toUpperCase()}\n`;
         const items = inventory[cat] || {};
-
         if (Object.keys(items).length === 0) {
             text += "  - (Empty)\n\n";
             continue;
         }
-
         for (const [item, qty] of Object.entries(items)) {
             text += `  - ${item} x${qty}\n`;
         }
         text += "\n";
     }
-
     return "```" + text + "```";
 }
 
-// Stash Message updaten
 async function updateStash(channel) {
     const inventory = loadInventory();
     const text = buildStashText(inventory);
-
     const messages = await channel.messages.fetch({ limit: 20 });
     const botMsg = messages.find(
         m => m.author.id === client.user.id && m.content.startsWith("```PINKPANTHER STASH")
     );
-
     if (botMsg) await botMsg.edit(text);
     else await channel.send(text);
 }
 
-// Logs
 async function sendLog(channelId, type, user, item, qty, category) {
     const channel = await client.channels.fetch(channelId).catch(() => null);
     if (!channel) return;
@@ -98,201 +93,173 @@ async function sendLog(channelId, type, user, item, qty, category) {
     channel.send({ embeds: [embed] });
 }
 
-// Ready
+/* ================== WORK REPORTS HELPERS ================== */
+function loadWorkData() {
+    if (!fs.existsSync(workFile)) return {};
+    return JSON.parse(fs.readFileSync(workFile, "utf8"));
+}
+
+function saveWorkData(data) {
+    fs.writeFileSync(workFile, JSON.stringify(data, null, 2));
+}
+
+function getWeeklyStats(memberId) {
+    const data = loadWorkData();
+    if (!data[memberId]) return {};
+    const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const stats = {};
+    data[memberId].forEach(report => {
+        const reportTime = new Date(report.date).getTime();
+        if (reportTime >= oneWeekAgo) {
+            for (const [item, qty] of Object.entries(report.items)) {
+                stats[item] = (stats[item] || 0) + qty;
+            }
+        }
+    });
+    return stats;
+}
+
+/* ================== READY ================== */
 client.once("ready", async () => {
     console.log(`✅ Bot online als ${client.user.tag}`);
     const channel = await client.channels.fetch(stashChannelId).catch(() => null);
     if (channel) updateStash(channel);
 });
 
-// ================== MESSAGE HANDLER ==================
+/* ================== MESSAGE HANDLER ================== */
 client.on("messageCreate", async (message) => {
     if (message.author.bot) return;
 
-    // ❗ NORMALER CHAT → NICHT löschen
-    if (message.channel.id !== stashChannelId) return;
+    // -------------------- STASH BOT --------------------
+    if (message.channel.id === stashChannelId) {
 
-    // Help Command
-    if (message.content.toLowerCase() === "!help") {
-        return message.channel.send(
-            "```DEPOSIT: item qty W/D/M/O\nWITHDRAW: -item qty W/D/M/O```"
-        );
-    }
-
-    // Rollen Check
-    const hasRole = message.member.roles.cache.some(r => allowedRoles.includes(r.name));
-    if (!hasRole) return;
-
-    // Erlaubtes Format
-    const match = message.content.match(/^(-?)(\S+)\s+(\d+)(?:\s+([WDMO]))?$/i);
-    if (!match) return; // ❗ Falsche Nachrichten bleiben stehen
-
-    const isWithdraw = match[1] === "-";
-    const item = match[2];
-    const qty = parseInt(match[3]);
-    const catMap = { W: "Weapons", D: "Drugs", M: "Materials", O: "Others" };
-    const category = catMap[(match[4] || "O").toUpperCase()];
-
-    const inventory = loadInventory();
-    if (!inventory[category]) inventory[category] = {};
-    if (!inventory[category][item]) inventory[category][item] = 0;
-
-    if (isWithdraw) {
-        if (inventory[category][item] < qty) {
-            return message.reply("❌ Not enough items!");
+        // Help Command
+        if (message.content.toLowerCase() === "!help") {
+            return message.channel.send(
+                "```DEPOSIT: item qty W/D/M/O\nWITHDRAW: -item qty W/D/M/O```"
+            );
         }
-        inventory[category][item] -= qty;
-        if (inventory[category][item] === 0) delete inventory[category][item];
-    } else {
-        inventory[category][item] += qty;
+
+        // Rollen Check
+        const hasRole = message.member.roles.cache.some(r => allowedRoles.includes(r.name));
+        if (!hasRole) return;
+
+        // Erlaubtes Format
+        const match = message.content.match(/^(-?)(\S+)\s+(\d+)(?:\s+([WDMO]))?$/i);
+        if (!match) return;
+
+        const isWithdraw = match[1] === "-";
+        const item = match[2];
+        const qty = parseInt(match[3]);
+        const catMap = { W: "Weapons", D: "Drugs", M: "Materials", O: "Others" };
+        const category = catMap[(match[4] || "O").toUpperCase()];
+
+        const inventory = loadInventory();
+        if (!inventory[category]) inventory[category] = {};
+        if (!inventory[category][item]) inventory[category][item] = 0;
+
+        if (isWithdraw) {
+            if (inventory[category][item] < qty) {
+                return message.reply("❌ Not enough items!");
+            }
+            inventory[category][item] -= qty;
+            if (inventory[category][item] === 0) delete inventory[category][item];
+        } else {
+            inventory[category][item] += qty;
+        }
+
+        saveInventory(inventory);
+        const stashChannel = await client.channels.fetch(stashChannelId);
+        updateStash(stashChannel);
+
+        sendLog(
+            isWithdraw ? withdrawLogChannelId : depositLogChannelId,
+            isWithdraw ? "withdraw" : "deposit",
+            message.author,
+            item,
+            qty,
+            category
+        );
+
+        message.delete().catch(() => {});
+        return;
     }
 
-    saveInventory(inventory);
+    // -------------------- WORK REPORTS --------------------
+    if (message.channel.id === workInputChannelId) {
+        await message.delete().catch(() => {});
 
-    const stashChannel = await client.channels.fetch(stashChannelId);
-    updateStash(stashChannel);
+        const lines = message.content.split("\n");
+        const reportItems = {};
+        for (const line of lines) {
+            const match = line.match(/^\+?(\d+)\s+(.+)$/);
+            if (match) {
+                const qty = parseInt(match[1]);
+                const item = match[2].trim();
+                reportItems[item] = (reportItems[item] || 0) + qty;
+            }
+        }
+        if (Object.keys(reportItems).length === 0) return;
 
-    sendLog(
-        isWithdraw ? withdrawLogChannelId : depositLogChannelId,
-        isWithdraw ? "withdraw" : "deposit",
-        message.author,
-        item,
-        qty,
-        category
-    );
+        const data = loadWorkData();
+        if (!data[message.author.id]) data[message.author.id] = [];
+        data[message.author.id].push({
+            date: new Date().toISOString(),
+            items: reportItems
+        });
+        saveWorkData(data);
 
-    message.delete().catch(() => {});
-});
-// ================== WORK-REPORTS FEATURE ==================
+        const embed = new EmbedBuilder()
+            .setTitle(`WORK REPORT – ${message.author.username}`)
+            .setDescription(
+                Object.entries(reportItems)
+                    .map(([item, qty]) => `${item}: ${qty}`)
+                    .join("\n")
+            )
+            .setTimestamp();
 
-// JSON Datei für Work-Reports
-const workFile = path.join(__dirname, "workStats.json");
-
-// Channel IDs
-const workInputChannelId = "1457408055833657364";  // Mitglieder posten hier
-const workStatsChannelId = "1457408149899317349";    // Leader Stats
-
-// Rollen, die !stats benutzen dürfen
-const leaderRoles = ["Two Bar", "One Bar"];
-
-// ================== JSON HELPERS ==================
-function loadWorkData() {
-  if (!fs.existsSync(workFile)) return {};
-  return JSON.parse(fs.readFileSync(workFile, "utf8"));
-}
-
-function saveWorkData(data) {
-  fs.writeFileSync(workFile, JSON.stringify(data, null, 2));
-}
-
-// Statistik der letzten 7 Tage
-function getWeeklyStats(memberId) {
-  const data = loadWorkData();
-  if (!data[memberId]) return {};
-  const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const stats = {};
-  data[memberId].forEach(report => {
-    const reportTime = new Date(report.date).getTime();
-    if (reportTime >= oneWeekAgo) {
-      for (const [item, qty] of Object.entries(report.items)) {
-        stats[item] = (stats[item] || 0) + qty;
-      }
-    }
-  });
-  return stats;
-}
-
-// ================== MESSAGE HANDLER ==================
-client.on("messageCreate", async (message) => {
-  if (message.author.bot) return;
-
-  // -------------------- Work Input Channel --------------------
-  if (message.channel.id === workInputChannelId) {
-    // Nachricht löschen
-    await message.delete().catch(() => {});
-
-    // Multi-line Parsing
-    const lines = message.content.split("\n");
-    const reportItems = {};
-    for (const line of lines) {
-      const match = line.match(/^\+?(\d+)\s+(.+)$/);
-      if (match) {
-        const qty = parseInt(match[1]);
-        const item = match[2].trim();
-        reportItems[item] = (reportItems[item] || 0) + qty;
-      }
+        const sentMsg = await message.channel.send({ embeds: [embed] });
+        setTimeout(() => sentMsg.delete().catch(() => {}), 30000);
+        return;
     }
 
-    if (Object.keys(reportItems).length === 0) return;
+    // -------------------- WORK STATS COMMAND --------------------
+    if (message.content.toLowerCase().startsWith("!stats")) {
+        const hasRole = message.member.roles.cache.some(r => leaderRoles.includes(r.name));
+        if (!hasRole) return message.reply("❌ You do not have permission to use this command.");
 
-    // Speichern in JSON
-    const data = loadWorkData();
-    if (!data[message.author.id]) data[message.author.id] = [];
-    data[message.author.id].push({
-      date: new Date().toISOString(),
-      items: reportItems
-    });
-    saveWorkData(data);
+        const args = message.content.split(" ");
+        if (args.length < 2) return message.reply("Usage: !stats <Member>");
+        const memberName = args[1];
 
-    // Embed erstellen und senden
-    const embed = new EmbedBuilder()
-      .setTitle(`WORK REPORT – ${message.author.username}`)
-      .setDescription(
-        Object.entries(reportItems)
-          .map(([item, qty]) => `${item}: ${qty}`)
-          .join("\n")
-      )
-      .setTimestamp();
+        let member;
+        if (message.mentions.members.size > 0) {
+            member = message.mentions.members.first();
+        } else {
+            member = message.guild.members.cache.find(m =>
+                m.user.username.toLowerCase() === memberName.toLowerCase() ||
+                m.displayName.toLowerCase() === memberName.toLowerCase()
+            );
+        }
+        if (!member) return message.reply("❌ Member not found.");
 
-    const sentMsg = await message.channel.send({ embeds: [embed] });
+        const stats = getWeeklyStats(member.id);
+        if (Object.keys(stats).length === 0) return message.reply(`No reports for ${member.user.username} in the last 7 days.`);
 
-    // Optional: Embed nach 30 Sekunden löschen
-    setTimeout(() => sentMsg.delete().catch(() => {}), 30000);
-    return;
-  }
+        const embed = new EmbedBuilder()
+            .setTitle(`WEEKLY STATISTICS – ${member.user.username}`)
+            .setDescription(
+                Object.entries(stats)
+                    .map(([item, qty]) => `${item}: ${qty}`)
+                    .join("\n")
+            )
+            .setTimestamp();
 
-  // -------------------- Stats Command --------------------
-  if (message.content.toLowerCase().startsWith("!stats")) {
-    // Rollen Check
-    const hasRole = message.member.roles.cache.some(r => leaderRoles.includes(r.name));
-    if (!hasRole) return message.reply("❌ You do not have permission to use this command.");
-
-    const args = message.content.split(" ");
-    if (args.length < 2) return message.reply("Usage: !stats <Member>");
-    const memberName = args[1];
-
-    // Member suchen (Username, DisplayName oder Mention)
-    let member;
-    if (message.mentions.members.size > 0) {
-      member = message.mentions.members.first();
-    } else {
-      member = message.guild.members.cache.find(m =>
-        m.user.username.toLowerCase() === memberName.toLowerCase() ||
-        m.displayName.toLowerCase() === memberName.toLowerCase()
-      );
+        const statsChannel = await client.channels.fetch(workStatsChannelId);
+        statsChannel.send({ embeds: [embed] });
+        return;
     }
-    if (!member) return message.reply("❌ Member not found.");
-
-    // Wochenstatistik abrufen
-    const stats = getWeeklyStats(member.id);
-    if (Object.keys(stats).length === 0) return message.reply(`No reports for ${member.user.username} in the last 7 days.`);
-
-    // Embed erstellen
-    const embed = new EmbedBuilder()
-      .setTitle(`WEEKLY STATISTICS – ${member.user.username}`)
-      .setDescription(
-        Object.entries(stats)
-          .map(([item, qty]) => `${item}: ${qty}`)
-          .join("\n")
-      )
-      .setTimestamp();
-
-    // Senden im Stats-Channel
-    const statsChannel = await client.channels.fetch(workStatsChannelId);
-    statsChannel.send({ embeds: [embed] });
-    return;
-  }
 });
 
-// Login
+// ================== LOGIN ==================
 client.login(process.env.TOKEN);
