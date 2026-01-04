@@ -10,20 +10,24 @@ const client = new Client({
     ]
 });
 
-// --- Rollen ---
+// Rollen, die Commands benutzen dürfen
 const allowedRoles = [
-    "Two Bar", "One Bar", "Three Stripes Circle", "Two Stripe", "One Stripe"
+    "Two Bar",
+    "One Bar",
+    "Three Stripes Circle",
+    "Two Stripe",
+    "One Stripe"
 ];
 
-// --- Channels ---
+// Channel IDs
 const stashChannelId = "1456489075941834949";
 const depositLogChannelId = "1456726864134668359";
 const withdrawLogChannelId = "1456733883021267038";
 
-// --- Inventory Datei ---
+// Inventory Datei
 const inventoryFile = './inventory.json';
 
-// --- Load / Save ---
+// --- Load / Save Inventory ---
 function loadInventory() {
     if (!fs.existsSync(inventoryFile)) return {};
     return JSON.parse(fs.readFileSync(inventoryFile));
@@ -33,7 +37,7 @@ function saveInventory(data) {
     fs.writeFileSync(inventoryFile, JSON.stringify(data, null, 2));
 }
 
-// --- ASCII MDT Board ---
+// --- Build Stash Text ---
 function buildStashText(inventory) {
     const padItem = (name, qty) => {
         const maxLen = 17;
@@ -65,7 +69,7 @@ function buildStashText(inventory) {
     return "```" + text + "```";
 }
 
-// --- Update Stash Board ---
+// --- Update Inventory Message ---
 async function updateInventoryMessage(channel) {
     const inventory = loadInventory();
     const stashText = buildStashText(inventory);
@@ -80,7 +84,7 @@ async function updateInventoryMessage(channel) {
     }
 }
 
-// --- Logs ---
+// --- Send Modern Log ---
 async function sendLog(channelId, action, user, item, qty, category) {
     const channel = await client.channels.fetch(channelId).catch(()=>null);
     if (!channel) return;
@@ -99,7 +103,7 @@ async function sendLog(channelId, action, user, item, qty, category) {
     channel.send({ embeds: [embed] });
 }
 
-// --- Ready ---
+// --- Bot Ready ---
 client.once('ready', async () => {
     console.log(`✅ Gang Bot online as ${client.user.tag}`);
     const stashChannel = await client.channels.fetch(stashChannelId).catch(()=>null);
@@ -110,60 +114,68 @@ client.once('ready', async () => {
 client.on('messageCreate', async message => {
     if (message.author.bot) return;
 
-    if (!message.content.startsWith('!deposit') && !message.content.startsWith('!withdraw')) return;
+    const match = message.content.match(/^!(deposit|withdraw)\s+(.+)/i);
+    if (!match) return;
 
-    const action = message.content.startsWith('!deposit') ? 'deposit' : 'withdraw';
+    const command = match[1].toLowerCase();
+    let rest = match[2].trim();
 
-    // Rollencheck
+    // Rollen Check
     const hasRole = message.member.roles.cache.some(r => allowedRoles.includes(r.name));
     if (!hasRole) {
-        await message.reply({ content: "❌ You don’t have permission!", ephemeral: true }).then(msg => setTimeout(()=>msg.delete().catch(()=>{}),4000));
+        await message.reply("❌ You don’t have permission!").then(msg => setTimeout(()=>msg.delete().catch(()=>{}),4000));
         return message.delete().catch(()=>{});
     }
 
-    const args = message.content.split(' ').slice(1);
-    if (args.length < 2) {
-        await message.reply({ content: `Usage: !${action} <item> <quantity> (<category>)`, ephemeral: true });
-        return message.delete().catch(()=>{});
+    // Kategorie aus Klammern
+    let category = "Others";
+    const categoryMatch = rest.match(/\(([^)]+)\)$/);
+    if (categoryMatch) {
+        const catInput = categoryMatch[1].trim().toLowerCase();
+        const validCategories = ["weapons","drugs","materials","others"];
+        if (!validCategories.includes(catInput)) {
+            return message.reply("❌ Invalid category! Use Weapons, Drugs, Materials, Others")
+                          .then(msg => setTimeout(()=>msg.delete().catch(()=>{}), 3000));
+        }
+        category = catInput.charAt(0).toUpperCase() + catInput.slice(1);
+        rest = rest.replace(/\([^)]+\)$/, "").trim();
     }
 
-    let item = args[0];
-    let qty = parseInt(args[1]);
-    if (isNaN(qty) || qty <= 0) {
-        await message.reply({ content: "❌ Invalid quantity!", ephemeral: true });
-        return message.delete().catch(()=>{});
-    }
+    // Menge = letzte Zahl
+    const qtyMatch = rest.match(/(\d+)$/);
+    if (!qtyMatch) return message.reply("❌ Invalid command!").then(msg=>setTimeout(()=>msg.delete().catch(()=>{}),3000));
+    const qty = parseInt(qtyMatch[1]);
 
-    let category = args[2] || 'Others';
-    category = category.replace(/[()]/g,''); 
-    const validCategories = ["Weapons","Drugs","Materials","Others"];
-    if (!validCategories.includes(category)) category = 'Others';
+    // Itemname = alles davor
+    const itemName = rest.slice(0, rest.lastIndexOf(qtyMatch[1])).trim();
+    if (!itemName || qty <= 0) return;
 
-    // Inventory update
+    // Load Inventory
     const inventory = loadInventory();
     if (!inventory[category]) inventory[category] = {};
-    if (!inventory[category][item]) inventory[category][item] = 0;
+    if (!inventory[category][itemName]) inventory[category][itemName] = 0;
 
-    if (action === 'deposit') inventory[category][item] += qty;
-    else {
-        if (inventory[category][item] < qty) {
-            await message.reply({ content: "❌ Not enough items!", ephemeral:true });
-            return message.delete().catch(()=>{});
+    if (command === "deposit") {
+        inventory[category][itemName] += qty;
+    } else if (command === "withdraw") {
+        if (!inventory[category][itemName] || inventory[category][itemName] < qty) {
+            return message.reply("❌ Not enough items!").then(msg=>setTimeout(()=>msg.delete().catch(()=>{}),3000));
         }
-        inventory[category][item] -= qty;
-        if (inventory[category][item] === 0) delete inventory[category][item];
+        inventory[category][itemName] -= qty;
+        if (inventory[category][itemName] === 0) delete inventory[category][itemName];
     }
 
     saveInventory(inventory);
 
+    // Update Stash Board
     const stashChannel = await client.channels.fetch(stashChannelId).catch(()=>null);
     if (stashChannel) updateInventoryMessage(stashChannel);
 
-    const logChannelId = action === 'deposit' ? depositLogChannelId : withdrawLogChannelId;
-    sendLog(logChannelId, action, message.author, item, qty, category);
+    // Send Log
+    const logChannelId = command === "deposit" ? depositLogChannelId : withdrawLogChannelId;
+    sendLog(logChannelId, command, message.author, itemName, qty, category);
 
-    // ephemeral success
-    await message.reply({ content: `✅ ${action} ${qty}x ${item} (${category}) successful!`, ephemeral:true });
+    // Delete command message
     message.delete().catch(()=>{});
 });
 
