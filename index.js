@@ -163,106 +163,145 @@ client.on("messageCreate", async (message) => {
 
     message.delete().catch(() => {});
 });
-// --------------------
-// Work-Reports Feature
-// --------------------
+const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
 
-const workInputChannelId = "1457408055833657364";   // Channel wo Mitglieder ihre Reports posten
-const workStatsChannelId = "1457408149899317349";   // Channel für Leader Stats
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers
+  ]
+});
 
-const leaderRoles = ["Two Bar", "One Bar"];     // Rollen die Stats abfragen dürfen
+// ================== CONFIG ==================
+const workInputChannelId = "1457408055833657364";  // Mitglieder posten hier
+const workStatsChannelId = "1457408149899317349";   // Leader Stats
 
-const workFile = "./workStats.json";  // JSON File für Reports
+const leaderRoles = ["Two Bar", "One Bar"];          // Rollen für !stats
 
-// JSON laden/speichern
+const workFile = path.join(__dirname, "workStats.json");
+
+// ================== JSON HELPERS ==================
 function loadWorkData() {
-    if (!fs.existsSync(workFile)) return {};
-    return JSON.parse(fs.readFileSync(workFile, "utf8"));
+  if (!fs.existsSync(workFile)) return {};
+  return JSON.parse(fs.readFileSync(workFile, "utf8"));
 }
 
 function saveWorkData(data) {
-    fs.writeFileSync(workFile, JSON.stringify(data, null, 2));
+  fs.writeFileSync(workFile, JSON.stringify(data, null, 2));
 }
 
 // Summiere Items der letzten 7 Tage
 function getWeeklyStats(memberId) {
-    const data = loadWorkData();
-    if (!data[memberId]) return {};
-    const oneWeekAgo = Date.now() - 7*24*60*60*1000;
-    const stats = {};
-    data[memberId].forEach(report => {
-        const reportTime = new Date(report.date).getTime();
-        if (reportTime >= oneWeekAgo) {
-            for (const [item, qty] of Object.entries(report.items)) {
-                stats[item] = (stats[item] || 0) + qty;
-            }
-        }
-    });
-    return stats;
+  const data = loadWorkData();
+  if (!data[memberId]) return {};
+  const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const stats = {};
+  data[memberId].forEach(report => {
+    const reportTime = new Date(report.date).getTime();
+    if (reportTime >= oneWeekAgo) {
+      for (const [item, qty] of Object.entries(report.items)) {
+        stats[item] = (stats[item] || 0) + qty;
+      }
+    }
+  });
+  return stats;
 }
 
-// Message handler für Work Input & Stats Command
+// ================== MESSAGE HANDLER ==================
 client.on("messageCreate", async (message) => {
-    if (message.author.bot) return;
+  if (message.author.bot) return;
 
-    // --- Work Input Channel ---
-    if (message.channel.id === workInputChannelId) {
-        await message.delete().catch(() => {});
-        const lines = message.content.split("\n");
-        const reportItems = {};
-        for (const line of lines) {
-            const match = line.match(/^\+?(\d+)\s+(.+)$/);
-            if (match) {
-                const qty = parseInt(match[1]);
-                const item = match[2].trim();
-                reportItems[item] = (reportItems[item] || 0) + qty;
-            }
-        }
-        if (Object.keys(reportItems).length === 0) return;
+  // -------------------- Work Input Channel --------------------
+  if (message.channel.id === workInputChannelId) {
+    // Nachricht sofort löschen
+    await message.delete().catch(() => {});
 
-        const data = loadWorkData();
-        if (!data[message.author.id]) data[message.author.id] = [];
-        data[message.author.id].push({ date: new Date().toISOString(), items: reportItems });
-        saveWorkData(data);
-
-        const embed = new EmbedBuilder()
-            .setTitle(`WORK REPORT – ${message.author.username}`)
-            .setDescription(Object.entries(reportItems).map(([item, qty]) => `${item}: ${qty}`).join("\n"))
-            .setTimestamp();
-
-        const sentMsg = await message.channel.send({ embeds: [embed] });
-        setTimeout(() => sentMsg.delete().catch(() => {}), 30000);
-        return;
+    // Multi-line Parsing
+    const lines = message.content.split("\n");
+    const reportItems = {};
+    for (const line of lines) {
+      const match = line.match(/^\+?(\d+)\s+(.+)$/);
+      if (match) {
+        const qty = parseInt(match[1]);
+        const item = match[2].trim();
+        reportItems[item] = (reportItems[item] || 0) + qty;
+      }
     }
 
-    // --- Stats Command ---
-    if (message.content.toLowerCase().startsWith("!stats")) {
-        const hasRole = message.member.roles.cache.some(r => leaderRoles.includes(r.name));
-        if (!hasRole) return message.reply("❌ You do not have permission to use this command.");
-        const args = message.content.split(" ");
-        if (args.length < 2) return message.reply("Usage: !stats <Member>");
-        const memberName = args[1];
-        const guild = message.guild;
-        const member = guild.members.cache.find(m => m.user.username.toLowerCase() === memberName.toLowerCase());
-        if (!member) return message.reply("❌ Member not found.");
+    if (Object.keys(reportItems).length === 0) return;
 
-        const stats = getWeeklyStats(member.id);
-        if (Object.keys(stats).length === 0) return message.reply(`No reports for ${member.user.username} in the last 7 days.`);
+    // Speichern in JSON
+    const data = loadWorkData();
+    if (!data[message.author.id]) data[message.author.id] = [];
+    data[message.author.id].push({
+      date: new Date().toISOString(),
+      items: reportItems
+    });
+    saveWorkData(data);
 
-        const embed = new EmbedBuilder()
-            .setTitle(`WEEKLY STATISTICS – ${member.user.username}`)
-            .setDescription(Object.entries(stats).map(([item, qty]) => `${item}: ${qty}`).join("\n"))
-            .setTimestamp();
+    // Embed erstellen und senden
+    const embed = new EmbedBuilder()
+      .setTitle(`WORK REPORT – ${message.author.username}`)
+      .setDescription(
+        Object.entries(reportItems)
+          .map(([item, qty]) => `${item}: ${qty}`)
+          .join("\n")
+      )
+      .setTimestamp();
 
-        const statsChannel = await client.channels.fetch(workStatsChannelId);
-        statsChannel.send({ embeds: [embed] });
-        return;
+    const sentMsg = await message.channel.send({ embeds: [embed] });
+
+    // Optional: Embed nach 30 Sekunden löschen, damit Input-Channel sauber bleibt
+    setTimeout(() => sentMsg.delete().catch(() => {}), 30000);
+    return;
+  }
+
+  // -------------------- Stats Command --------------------
+  if (message.content.toLowerCase().startsWith("!stats")) {
+    // Rollen Check
+    const hasRole = message.member.roles.cache.some(r => leaderRoles.includes(r.name));
+    if (!hasRole) return message.reply("❌ You do not have permission to use this command.");
+
+    const args = message.content.split(" ");
+    if (args.length < 2) return message.reply("Usage: !stats <Member>");
+    const memberName = args[1];
+
+    // Member suchen (Username oder DisplayName)
+    let member;
+    if (message.mentions.members.size > 0) {
+      member = message.mentions.members.first();
+    } else {
+      member = message.guild.members.cache.find(m =>
+        m.user.username.toLowerCase() === memberName.toLowerCase() ||
+        m.displayName.toLowerCase() === memberName.toLowerCase()
+      );
     }
+    if (!member) return message.reply("❌ Member not found.");
+
+    // Wochenstatistik abrufen
+    const stats = getWeeklyStats(member.id);
+    if (Object.keys(stats).length === 0) return message.reply(`No reports for ${member.user.username} in the last 7 days.`);
+
+    // Embed erstellen
+    const embed = new EmbedBuilder()
+      .setTitle(`WEEKLY STATISTICS – ${member.user.username}`)
+      .setDescription(
+        Object.entries(stats)
+          .map(([item, qty]) => `${item}: ${qty}`)
+          .join("\n")
+      )
+      .setTimestamp();
+
+    // Senden im Stats-Channel
+    const statsChannel = await client.channels.fetch(workStatsChannelId);
+    statsChannel.send({ embeds: [embed] });
+    return;
+  }
 });
-
-// --------------------
-// Ende Work-Reports Feature
-// --------------------
 
 // Login
 client.login(process.env.TOKEN);
