@@ -10,7 +10,7 @@ const client = new Client({
     ]
 });
 
-// Rollen, die Commands benutzen dürfen
+// --- Rollen die Commands nutzen dürfen ---
 const allowedRoles = [
     "Two Bar",
     "One Bar",
@@ -19,12 +19,12 @@ const allowedRoles = [
     "One Stripe"
 ];
 
-// Channel IDs
+// --- Channels ---
 const stashChannelId = "1456489075941834949";
 const depositLogChannelId = "1456726864134668359";
 const withdrawLogChannelId = "1456733883021267038";
 
-// Inventory Datei
+// --- Inventory Datei ---
 const inventoryFile = './inventory.json';
 
 // --- Load / Save Inventory ---
@@ -37,7 +37,7 @@ function saveInventory(data) {
     fs.writeFileSync(inventoryFile, JSON.stringify(data, null, 2));
 }
 
-// --- Build Stash Text ---
+// --- ASCII Stash Board ---
 function buildStashText(inventory) {
     const padItem = (name, qty) => {
         const maxLen = 17;
@@ -46,7 +46,7 @@ function buildStashText(inventory) {
         return `  - ${itemName}${qtyStr}`;
     }
 
-    const categories = ["Weapons", "Drugs", "Materials", "Others"];
+    const categories = ["Weapons","Drugs","Materials","Others"];
     let text = `PINKPANTHER STASH\n────────────────────────────────────────────────────────────────────\n\n`;
 
     for (const cat of categories) {
@@ -69,7 +69,7 @@ function buildStashText(inventory) {
     return "```" + text + "```";
 }
 
-// --- Update Inventory Message ---
+// --- Update Stash Board ---
 async function updateInventoryMessage(channel) {
     const inventory = loadInventory();
     const stashText = buildStashText(inventory);
@@ -84,7 +84,7 @@ async function updateInventoryMessage(channel) {
     }
 }
 
-// --- Send Modern Log ---
+// --- Logs ---
 async function sendLog(channelId, action, user, item, qty, category) {
     const channel = await client.channels.fetch(channelId).catch(()=>null);
     if (!channel) return;
@@ -103,7 +103,7 @@ async function sendLog(channelId, action, user, item, qty, category) {
     channel.send({ embeds: [embed] });
 }
 
-// --- Bot Ready ---
+// --- Ready ---
 client.once('ready', async () => {
     console.log(`✅ Gang Bot online as ${client.user.tag}`);
     const stashChannel = await client.channels.fetch(stashChannelId).catch(()=>null);
@@ -114,11 +114,8 @@ client.once('ready', async () => {
 client.on('messageCreate', async message => {
     if (message.author.bot) return;
 
-    const match = message.content.match(/^!(deposit|withdraw)\s+(.+)/i);
-    if (!match) return;
-
-    const command = match[1].toLowerCase();
-    let rest = match[2].trim();
+    const args = message.content.trim().split(/\s+/);
+    if (args.length < 2) return; // Mindestens Item + Menge
 
     // Rollen Check
     const hasRole = message.member.roles.cache.some(r => allowedRoles.includes(r.name));
@@ -127,39 +124,32 @@ client.on('messageCreate', async message => {
         return message.delete().catch(()=>{});
     }
 
-    // Kategorie aus Klammern
-    let category = "Others";
-    const categoryMatch = rest.match(/\(([^)]+)\)$/);
-    if (categoryMatch) {
-        const catInput = categoryMatch[1].trim().toLowerCase();
-        const validCategories = ["weapons","drugs","materials","others"];
-        if (!validCategories.includes(catInput)) {
-            return message.reply("❌ Invalid category! Use Weapons, Drugs, Materials, Others")
-                          .then(msg => setTimeout(()=>msg.delete().catch(()=>{}), 3000));
-        }
-        category = catInput.charAt(0).toUpperCase() + catInput.slice(1);
-        rest = rest.replace(/\([^)]+\)$/, "").trim();
+    // Withdraw wenn Minus vor Item
+    let isWithdraw = false;
+    let itemName = args[0];
+    if (itemName.startsWith('-')) {
+        isWithdraw = true;
+        itemName = itemName.slice(1);
     }
 
-    // Menge = letzte Zahl
-    const qtyMatch = rest.match(/(\d+)$/);
-    if (!qtyMatch) return message.reply("❌ Invalid command!").then(msg=>setTimeout(()=>msg.delete().catch(()=>{}),3000));
-    const qty = parseInt(qtyMatch[1]);
+    const qty = parseInt(args[1]);
+    if (isNaN(qty) || qty <= 0) return message.delete().catch(()=>{});
 
-    // Itemname = alles davor
-    const itemName = rest.slice(0, rest.lastIndexOf(qtyMatch[1])).trim();
-    if (!itemName || qty <= 0) return;
+    // Kategorie Kürzel
+    const categoryMap = { W:"Weapons", D:"Drugs", M:"Materials", O:"Others" };
+    const catInput = (args[2] || "O").toUpperCase();
+    const category = categoryMap[catInput] || "Others";
 
     // Load Inventory
     const inventory = loadInventory();
     if (!inventory[category]) inventory[category] = {};
     if (!inventory[category][itemName]) inventory[category][itemName] = 0;
 
-    if (command === "deposit") {
-        inventory[category][itemName] += qty;
-    } else if (command === "withdraw") {
+    if (!isWithdraw) inventory[category][itemName] += qty;
+    else {
         if (!inventory[category][itemName] || inventory[category][itemName] < qty) {
-            return message.reply("❌ Not enough items!").then(msg=>setTimeout(()=>msg.delete().catch(()=>{}),3000));
+            await message.reply("❌ Not enough items!").then(msg=>setTimeout(()=>msg.delete().catch(()=>{}),3000));
+            return message.delete().catch(()=>{});
         }
         inventory[category][itemName] -= qty;
         if (inventory[category][itemName] === 0) delete inventory[category][itemName];
@@ -171,11 +161,11 @@ client.on('messageCreate', async message => {
     const stashChannel = await client.channels.fetch(stashChannelId).catch(()=>null);
     if (stashChannel) updateInventoryMessage(stashChannel);
 
-    // Send Log
-    const logChannelId = command === "deposit" ? depositLogChannelId : withdrawLogChannelId;
-    sendLog(logChannelId, command, message.author, itemName, qty, category);
+    // Logs
+    const logChannelId = isWithdraw ? withdrawLogChannelId : depositLogChannelId;
+    sendLog(logChannelId, isWithdraw ? "withdraw" : "deposit", message.author, itemName, qty, category);
 
-    // Delete command message
+    // Alles löschen
     message.delete().catch(()=>{});
 });
 
