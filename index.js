@@ -167,8 +167,8 @@ client.on("messageCreate", async (message) => {
 // Work-Reports Feature
 // --------------------
 
-const workInputChannelId = "CHANNEL_ID_INPUT";   // Channel wo Mitglieder ihre Reports posten
-const workStatsChannelId = "CHANNEL_ID_STATS";   // Channel für Leader Stats
+const workInputChannelId = "1457408055833657364";   // Channel wo Mitglieder ihre Reports posten
+const workStatsChannelId = "1457408149899317349";   // Channel für Leader Stats
 
 const leaderRoles = ["Two Bar", "One Bar"];     // Rollen die Stats abfragen dürfen
 
