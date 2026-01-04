@@ -148,6 +148,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
         const category = interaction.values[0];
 
+        // Prompt wird sofort gelöscht nach Eingabe
         const promptMsg = await interaction.update({ content: `Type the item name you want to ${action} in **${category}**:`, components: [] });
 
         const filter = m => m.author.id === interaction.user.id;
@@ -157,11 +158,9 @@ client.on(Events.InteractionCreate, async interaction => {
             const itemName = m.content.trim();
             if (!itemName) return;
 
-            // Lösche Prompt + User Nachricht direkt
             m.delete().catch(()=>{});
             promptMsg.delete().catch(()=>{});
 
-            // Buttons für Menge inkl. Custom
             const row = new ActionRowBuilder()
                 .addComponents([
                     new ButtonBuilder().setCustomId(`qty1_${action}_${category}_${itemName}`).setLabel('1').setStyle(ButtonStyle.Primary),
