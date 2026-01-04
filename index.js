@@ -143,12 +143,12 @@ client.on('messageCreate', async message => {
 client.on(Events.InteractionCreate, async interaction => {
     if (!interaction.isStringSelectMenu()) return;
 
-    const [type, action] = interaction.customId.split('_'); // selectCategory_deposit
+    const [type, action] = interaction.customId.split('_'); 
     if (type !== "selectCategory") return;
 
     const category = interaction.values[0];
 
-    // Bot fragt Itemname im Chat
+    // Prompt User für Item Name IM CHAT
     const promptMsg = await interaction.update({ content: `Type the item name you want to ${action} in **${category}**:`, components: [] });
 
     const filter = m => m.author.id === interaction.user.id;
@@ -158,8 +158,9 @@ client.on(Events.InteractionCreate, async interaction => {
         const itemName = m.content.trim();
         if (!itemName) return;
 
-        m.delete().catch(()=>{}); // User input löschen
-        if (promptMsg) setTimeout(()=> promptMsg.delete().catch(()=>{}), 200); // Prompt löschen
+        // Lösche User Nachricht + Prompt direkt
+        m.delete().catch(()=>{});
+        promptMsg.delete().catch(()=>{});
 
         // Buttons für Menge inkl. Custom
         const row = new ActionRowBuilder()
@@ -180,16 +181,20 @@ client.on(Events.InteractionCreate, async interaction => {
 
     const [qtyStr, action, category, item] = interaction.customId.split('_');
 
+    // Button Nachricht sofort löschen
+    await interaction.message.delete().catch(()=>{});
+
     if (qtyStr === "custom") {
-        // Custom Menge prompt ephemeral
-        await interaction.reply({ content: `Type the quantity for **${item}** (${category}):`, ephemeral: true });
+        const promptMsg = await interaction.channel.send(`${interaction.user}, type the quantity for **${item}** (${category}):`);
 
         const filter = m => m.author.id === interaction.user.id;
         const collector = interaction.channel.createMessageCollector({ filter, time: 30000, max: 1 });
 
         collector.on('collect', async m => {
             const customQty = parseInt(m.content);
-            m.delete().catch(()=>{}); // User Nachricht sofort löschen
+            m.delete().catch(()=>{});
+            promptMsg.delete().catch(()=>{});
+
             if (isNaN(customQty) || customQty <= 0) {
                 return interaction.followUp({ content: "❌ Invalid quantity!", ephemeral: true });
             }
@@ -197,23 +202,18 @@ client.on(Events.InteractionCreate, async interaction => {
             await handleInventoryUpdate(action, category, item, customQty, interaction);
         });
 
-        // Button-Nachricht sofort löschen
-        await interaction.message.delete().catch(()=>{});
         return;
     }
 
     const qty = parseInt(qtyStr.replace('qty',''));
     await handleInventoryUpdate(action, category, item, qty, interaction);
-
-    // Button-Nachricht löschen
-    await interaction.message.delete().catch(()=>{});
 });
 
 // --- Inventory Update Function ---
 async function handleInventoryUpdate(action, category, item, qty, interaction) {
     const inventory = loadInventory();
     if (!inventory[category]) inventory[category] = {};
-    if (!inventory[category][item]) inventory[category][item] = 0;
+    if (!inventory[category][item]) inventory[category] = 0;
 
     if (action === 'deposit') inventory[category][item] += qty;
     else if (action === 'withdraw') {
