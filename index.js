@@ -1,6 +1,6 @@
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const fs = require('fs');
-const path = require('path'); // für Work-Reports
+const path = require('path'); // für WorkReports
 
 const client = new Client({
     intents: [
@@ -13,7 +13,7 @@ const client = new Client({
 
 /* ================== CONFIG ================== */
 
-// Rollen die den Stash benutzen dürfen
+// Rollen für Stash
 const allowedRoles = [
     "Two Bar",
     "One Bar",
@@ -22,18 +22,18 @@ const allowedRoles = [
     "One Stripe"
 ];
 
+// Rollen für WorkStats Command
+const leaderRoles = ["Two Bar", "One Bar"];
+
 // Channels
 const stashChannelId = "1456489075941834949";
 const depositLogChannelId = "1456726864134668359";
 const withdrawLogChannelId = "1456733883021267038";
+const workInputChannelId = "1457408055833657364"; // Mitglieder posten hier
+const workStatsChannelId = "1457408149899317349";   // Leader sehen Stats hier
 
-// Inventory Datei
+// Files
 const inventoryFile = "./inventory.json";
-
-// Work Reports
-const workInputChannelId = "WORKREPORTS_CHANNEL_ID"; // hier posten Mitglieder
-const workStatsChannelId = "WORKSTATS_CHANNEL_ID";   // hier posten Leader die Stats
-const leaderRoles = ["Two Bar", "One Bar"];          // wer !stats benutzen darf
 const workFile = path.join(__dirname, "workStats.json");
 
 /* ================== STASH BOT HELPERS ================== */
@@ -144,7 +144,7 @@ client.on("messageCreate", async (message) => {
         const hasRole = message.member.roles.cache.some(r => allowedRoles.includes(r.name));
         if (!hasRole) return;
 
-        // Erlaubtes Format
+        // Format Check
         const match = message.content.match(/^(-?)(\S+)\s+(\d+)(?:\s+([WDMO]))?$/i);
         if (!match) return;
 
@@ -191,14 +191,16 @@ client.on("messageCreate", async (message) => {
 
         const lines = message.content.split("\n");
         const reportItems = {};
+
         for (const line of lines) {
-            const match = line.match(/^\+?(\d+)\s+(.+)$/);
+            const match = line.trim().match(/^(\+?\d+)\s+(.+)$/);
             if (match) {
                 const qty = parseInt(match[1]);
                 const item = match[2].trim();
                 reportItems[item] = (reportItems[item] || 0) + qty;
             }
         }
+
         if (Object.keys(reportItems).length === 0) return;
 
         const data = loadWorkData();
