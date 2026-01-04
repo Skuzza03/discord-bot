@@ -22,24 +22,19 @@ const workReportsChannelId = "1457408055833657364";
 const workStatsChannelId = "1457408149899317349";
 const leaderRoles = ["Two Bar", "One Bar"];
 
-// Inventory Datei (Stash)
+// Inventory Datei
 const inventoryFile = "./inventory.json";
-
 // WorkStats Datei
 const workFile = path.join(__dirname, "workStats.json");
 
 // ================= HELPER FUNCTIONS =================
-
-// --- Inventory (Stash) ---
 function loadInventory() {
   if (!fs.existsSync(inventoryFile)) return {};
   return JSON.parse(fs.readFileSync(inventoryFile, "utf8"));
 }
-
 function saveInventory(data) {
   fs.writeFileSync(inventoryFile, JSON.stringify(data, null, 2));
 }
-
 function buildStashText(inventory) {
   const categories = ["Weapons", "Drugs", "Materials", "Others"];
   let text = `PINKPANTHER STASH\n──────────────────────────────\n\n`;
@@ -57,7 +52,6 @@ function buildStashText(inventory) {
   }
   return "```" + text + "```";
 }
-
 async function updateStash(channel) {
   const inventory = loadInventory();
   const text = buildStashText(inventory);
@@ -68,7 +62,6 @@ async function updateStash(channel) {
   if (botMsg) await botMsg.edit(text);
   else await channel.send(text);
 }
-
 async function sendLog(channelId, type, user, item, qty, category) {
   const channel = await client.channels.fetch(channelId).catch(() => null);
   if (!channel) return;
@@ -85,16 +78,14 @@ async function sendLog(channelId, type, user, item, qty, category) {
   channel.send({ embeds: [embed] });
 }
 
-// --- WorkStats ---
+// --- WorkStats
 function loadWorkStats() {
   if (!fs.existsSync(workFile)) return {};
   return JSON.parse(fs.readFileSync(workFile, "utf8"));
 }
-
 function saveWorkStats(data) {
   fs.writeFileSync(workFile, JSON.stringify(data, null, 2));
 }
-
 function getDateTime() {
   return new Date().toLocaleString("en-US", { hour12: false });
 }
@@ -109,11 +100,10 @@ client.once("ready", async () => {
 // ================= MESSAGE HANDLER =================
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
-
   const content = message.content.trim();
-  const isLeader = message.member.roles.cache.some(r => leaderRoles.includes(r.name));
+  const isLeader = message.member.roles.cache.some((r) => leaderRoles.includes(r.name));
 
-  // ================= STASH HANDLER =================
+  // --- STASH HANDLER ---
   if (message.channel.id === stashChannelId) {
     const hasRole = message.member.roles.cache.some((r) => allowedRoles.includes(r.name));
     if (!hasRole) return;
@@ -159,14 +149,13 @@ client.on("messageCreate", async (message) => {
     return message.delete().catch(() => {});
   }
 
-  // ================= WORKREPORTS HANDLER =================
+  // --- WORKREPORTS HANDLER ---
   if (message.channel.id === workReportsChannelId) {
     const match = content.match(/^\+?(\d+)\s+(\S+)$/i);
     if (!match) return;
 
     const qty = parseInt(match[1]);
     const item = match[2].toLowerCase();
-
     const stats = loadWorkStats();
     const username = message.author.username.toLowerCase();
 
@@ -174,18 +163,44 @@ client.on("messageCreate", async (message) => {
     if (!stats[username][item]) stats[username][item] = 0;
 
     stats[username][item] += qty;
-    stats[username]._last = getDateTime(); // letzte Aktivität
+    stats[username]._last = getDateTime();
     saveWorkStats(stats);
 
     return message.delete().catch(() => {});
   }
 
-  // ================= WORKSTATS HANDLER =================
+  // --- WORKSTATS HANDLER ---
   if (message.channel.id === workStatsChannelId) {
 
-    // --- !members Command (permanent)
+    // --- !help mit Gang Members
+    if (content.toLowerCase() === "!help") {
+      const guide = `
+WorkReports & WorkStats Guide (Leaders)
+
+**Gang Members:**
+Fati → thebicaj
+Skuzza → sku7zz7a
+Ubi → ubi07
+M3D → medii2558
+-CIMA- → cima12
+Hashim Thaqi → zezakibardh
+HOXHA → ghosty7126
+rizzi95 → bucorulzz
+Tropojan1 → kristi7157
+PSIKOPATI → psikopatii_
+
+**Commands:**
+!stats <member> → Show stats for a member
+!res <member> → Reset stats for a member
+!top3 → Show top 3 workers
+      `;
+      return message.channel.send(guide); // permanent, wird nicht gelöscht
+    }
+
+    const stats = loadWorkStats();
+
+    // --- !members permanent
     if (content.toLowerCase() === "!members") {
-      let text = "**Gang Members:**\n";
       const gangMembers = [
         { name: "Fati", username: "thebicaj" },
         { name: "Skuzza", username: "sku7zz7a" },
@@ -198,24 +213,11 @@ client.on("messageCreate", async (message) => {
         { name: "Tropojan1", username: "kristi7157" },
         { name: "PSIKOPATI", username: "psikopatii_" }
       ];
+      let text = "**Gang Members:**\n";
       gangMembers.forEach(m => {
         text += `${m.name} → ${m.username}\n`;
       });
-      return message.channel.send(text); // bleibt permanent
-    }
-
-    const stats = loadWorkStats();
-
-    // --- !help
-    if (content.toLowerCase() === "!help") {
-      const guide = `
-WorkReports & WorkStats Guide (Leaders)
-Commands:
-!stats <member> → Show stats for a member
-!res <member> → Reset stats for a member
-!top3 → Show top 3 workers
-      `;
-      return message.channel.send(guide); // bleibt
+      return message.channel.send(text); // permanent
     }
 
     // --- !stats
@@ -223,21 +225,16 @@ Commands:
       if (!isLeader) return message.delete().catch(() => {});
       const memberName = content.slice(7).trim().toLowerCase();
       if (!stats[memberName]) {
-        await message.reply(`❌ No reports for ${memberName}.`).then((msg) => {
-          setTimeout(() => msg.delete().catch(() => {}), 10000);
-        });
+        await message.reply(`❌ No reports for ${memberName}.`).then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000));
         return message.delete().catch(() => {});
       }
-
       let text = `Work stats for ${memberName}:\n`;
       for (const [item, qty] of Object.entries(stats[memberName])) {
         if (item === "_last") continue;
         text += `${item}: ${qty}\n`;
       }
       text += `Last update: ${stats[memberName]._last}`;
-      await message.channel.send(text).then((msg) => {
-        setTimeout(() => msg.delete().catch(() => {}), 10000);
-      });
+      await message.channel.send(text).then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000));
       return message.delete().catch(() => {});
     }
 
@@ -246,16 +243,12 @@ Commands:
       if (!isLeader) return message.delete().catch(() => {});
       const memberName = content.slice(5).trim().toLowerCase();
       if (!stats[memberName]) {
-        await message.reply(`❌ No reports for ${memberName}.`).then((msg) => {
-          setTimeout(() => msg.delete().catch(() => {}), 10000);
-        });
+        await message.reply(`❌ No reports for ${memberName}.`).then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000));
         return message.delete().catch(() => {});
       }
       delete stats[memberName];
       saveWorkStats(stats);
-      await message.reply(`✅ Reset stats for ${memberName} at ${getDateTime()}`).then((msg) => {
-        setTimeout(() => msg.delete().catch(() => {}), 10000);
-      });
+      await message.reply(`✅ Reset stats for ${memberName} at ${getDateTime()}`).then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000));
       return message.delete().catch(() => {});
     }
 
@@ -276,9 +269,7 @@ Commands:
       for (const a of arr) {
         text += `${a.name}: ${a.sum} → ${a.last}\n`;
       }
-      await message.channel.send(text).then((msg) => {
-        setTimeout(() => msg.delete().catch(() => {}), 10000);
-      });
+      await message.channel.send(text).then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000));
       return message.delete().catch(() => {});
     }
 
