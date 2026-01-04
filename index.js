@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, EmbedBuilder, Events } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 
 const client = new Client({
@@ -106,7 +106,7 @@ client.once('ready', async () => {
     if (stashChannel) updateInventoryMessage(stashChannel);
 });
 
-// --- Deposit / Withdraw Commands ---
+// --- Commands ---
 client.on('messageCreate', async message => {
     if (message.author.bot) return;
 
@@ -121,7 +121,7 @@ client.on('messageCreate', async message => {
         return message.delete().catch(()=>{});
     }
 
-    const args = message.content.split(' ').slice(1); // alles nach !deposit / !withdraw
+    const args = message.content.split(' ').slice(1);
     if (args.length < 2) {
         await message.reply({ content: `Usage: !${action} <item> <quantity> (<category>)`, ephemeral: true });
         return message.delete().catch(()=>{});
@@ -135,7 +135,7 @@ client.on('messageCreate', async message => {
     }
 
     let category = args[2] || 'Others';
-    category = category.replace(/[()]/g,''); // Klammern entfernen
+    category = category.replace(/[()]/g,''); 
     const validCategories = ["Weapons","Drugs","Materials","Others"];
     if (!validCategories.includes(category)) category = 'Others';
 
