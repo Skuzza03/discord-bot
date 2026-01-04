@@ -154,27 +154,52 @@ client.on(Events.InteractionCreate, async interaction => {
         if (!itemName) return;
 
         m.delete().catch(()=>{}); // User input löschen
-        if (promptMsg) setTimeout(()=> promptMsg.delete().catch(()=>{}), 2000); // Prompt löschen
+        if (promptMsg) setTimeout(()=> promptMsg.delete().catch(()=>{}), 200); // Prompt löschen
 
-        // Buttons für Menge
+        // Buttons für Menge inkl. Custom
         const row = new ActionRowBuilder()
             .addComponents([
                 new ButtonBuilder().setCustomId(`qty1_${action}_${category}_${itemName}`).setLabel('1').setStyle(ButtonStyle.Primary),
                 new ButtonBuilder().setCustomId(`qty5_${action}_${category}_${itemName}`).setLabel('5').setStyle(ButtonStyle.Primary),
                 new ButtonBuilder().setCustomId(`qty10_${action}_${category}_${itemName}`).setLabel('10').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`custom_${action}_${category}_${itemName}`).setLabel('Custom').setStyle(ButtonStyle.Secondary),
             ]);
 
         await interaction.channel.send({ content: `Select quantity for **${itemName}**:`, components: [row] });
     });
 });
 
-// --- Button Handling for Quantity ---
+// --- Button Handling for Quantity inkl. Custom ---
 client.on(Events.InteractionCreate, async interaction => {
     if (!interaction.isButton()) return;
 
     const [qtyStr, action, category, item] = interaction.customId.split('_');
-    const qty = parseInt(qtyStr.replace('qty',''));
 
+    if (qtyStr === "custom") {
+        // Custom Menge
+        await interaction.reply({ content: `Type the quantity for **${item}** (${category}):`, ephemeral: true });
+
+        const filter = m => m.author.id === interaction.user.id;
+        const collector = interaction.channel.createMessageCollector({ filter, time: 30000, max: 1 });
+
+        collector.on('collect', m => {
+            const customQty = parseInt(m.content);
+            m.delete().catch(()=>{});
+            if (isNaN(customQty) || customQty <= 0) {
+                return interaction.followUp({ content: "❌ Invalid quantity!", ephemeral: true });
+            }
+            handleInventoryUpdate(action, category, item, customQty, interaction);
+        });
+
+        return;
+    }
+
+    const qty = parseInt(qtyStr.replace('qty',''));
+    handleInventoryUpdate(action, category, item, qty, interaction);
+});
+
+// --- Inventory Update Function ---
+async function handleInventoryUpdate(action, category, item, qty, interaction) {
     const inventory = loadInventory();
     if (!inventory[category]) inventory[category] = {};
     if (!inventory[category][item]) inventory[category][item] = 0;
@@ -190,7 +215,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
     saveInventory(inventory);
 
-    // Update Stash Board
+    // Update Board
     const stashChannel = await client.channels.fetch(stashChannelId).catch(()=>null);
     if (stashChannel) updateInventoryMessage(stashChannel);
 
@@ -198,9 +223,9 @@ client.on(Events.InteractionCreate, async interaction => {
     const logChannelId = action === 'deposit' ? depositLogChannelId : withdrawLogChannelId;
     sendLog(logChannelId, action, interaction.user, item, qty, category);
 
-    // Ephemeral Bestätigung
+    // Buttons löschen + ephemeral Bestätigung
     await interaction.update({ content: `✅ ${action} ${qty}x ${item} (${category}) successful!`, components: [] });
-});
+}
 
 // --- Login ---
 client.login(process.env.TOKEN);
