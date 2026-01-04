@@ -25,8 +25,6 @@ const inventoryFile = "./inventory.json";
 const workFile = path.join(__dirname, "workStats.json");
 
 // ================= HELPER FUNCTIONS =================
-
-// --- Inventory (Stash) ---
 function loadInventory() {
   if (!fs.existsSync(inventoryFile)) return {};
   return JSON.parse(fs.readFileSync(inventoryFile, "utf8"));
@@ -169,7 +167,7 @@ client.on("messageCreate", async (message) => {
     if (!stats[username][item]) stats[username][item] = 0;
 
     stats[username][item] += qty;
-    stats[username]._last = getDateTime(); // letzte Aktivität
+    stats[username]._last = getDateTime();
     saveWorkStats(stats);
 
     return message.delete().catch(() => {});
@@ -179,13 +177,14 @@ client.on("messageCreate", async (message) => {
   if (message.channel.id === workStatsChannelId) {
     const stats = loadWorkStats();
 
-    // --- !help Embed (permanent)
+    // --- !help Embed (modern)
     if (content.toLowerCase() === "!help") {
       const embed = new EmbedBuilder()
-        .setTitle("WorkReports & WorkStats Guide (Leaders)")
-        .setColor(0x3498db)
+        .setTitle("📊 WorkReports & WorkStats Guide (Leaders)")
+        .setColor(0x1abc9c)
+        .setDescription("Gang Members & Commands Übersicht")
         .addFields(
-          { name: "Gang Members", value:
+          { name: "👥 Gang Members", value:
             "Fati → thebicaj\n" +
             "Skuzza → sku7zz7a\n" +
             "Ubi → ubi07\n" +
@@ -197,7 +196,7 @@ client.on("messageCreate", async (message) => {
             "Tropojan1 → kristi7157\n" +
             "PSIKOPATI → psikopatii_" 
           },
-          { name: "Commands", value:
+          { name: "⚡ Commands", value:
             "!stats <member> → Show stats for a member\n" +
             "!res <member> → Reset stats for a member\n" +
             "!top3 → Show top 3 workers"
@@ -208,10 +207,10 @@ client.on("messageCreate", async (message) => {
       return message.channel.send({ embeds: [embed] });
     }
 
-    // --- !members Embed (permanent)
+    // --- !members Embed (Gang Members, permanent)
     if (content.toLowerCase() === "!members") {
       const embed = new EmbedBuilder()
-        .setTitle("Gang Members")
+        .setTitle("👥 Gang Members")
         .setColor(0x3498db)
         .setDescription(
           "Fati → thebicaj\n" +
@@ -242,7 +241,7 @@ client.on("messageCreate", async (message) => {
       let text = `Work stats for ${memberName}:\n`;
       for (const [item, qty] of Object.entries(stats[memberName])) {
         if (item === "_last") continue;
-        text += `${item}: ${qty}\n`;
+        text += `• ${item}: ${qty}\n`;
       }
       text += `Last update: ${stats[memberName]._last}`;
       await message.channel.send(text).then((msg) => {
@@ -282,9 +281,9 @@ client.on("messageCreate", async (message) => {
         .sort((a,b) => b.sum - a.sum)
         .slice(0,3);
 
-      let text = "Top 3 Workers:\n";
+      let text = "🏆 Top 3 Workers:\n";
       for (const a of arr) {
-        text += `${a.name}: ${a.sum} → ${a.last}\n`;
+        text += `• ${a.name}: ${a.sum} → ${a.last}\n`;
       }
       await message.channel.send(text).then((msg) => {
         setTimeout(() => msg.delete().catch(() => {}), 10000);
