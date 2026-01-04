@@ -196,6 +196,59 @@ Commands:
 
     const stats = loadWorkStats();
 
+    client.on("messageCreate", async (message) => {
+  if (message.author.bot) return;
+
+  const content = message.content;
+  const isLeader = message.member.roles.cache.some(r => ["Two Bar","One Bar"].includes(r.name));
+
+  // --- !members Command (Permanent, nicht gelöscht)
+  if (content.toLowerCase() === "!members") {
+    if (!isLeader) return message.delete().catch(() => {});
+
+    let text = "**Gang Members:**\n";
+    const gangMembers = [
+      { name: "Fati", username: "thebicaj" },
+      { name: "Skuzza", username: "sku7zz7a" },
+      { name: "Ubi", username: "ubi07" },
+      { name: "M3D", username: "medii2558" },
+      { name: "-CIMA-", username: "cima12" },
+      { name: "Hashim Thaqi", username: "zezakibardh" },
+      { name: "HOXHA", username: "ghosty7126" },
+      { name: "rizzi95", username: "bucorulzz" },
+      { name: "Tropojan1", username: "kristi7157" },
+      { name: "PSIKOPATI", username: "psikopatii_" }
+    ];
+
+    gangMembers.forEach(m => {
+      text += `${m.name} → ${m.username}\n`;
+    });
+
+    await message.channel.send(text);
+    return; // keine message.delete()
+  }
+
+  // --- !stats, !res, !top3 kommen **nach !members**
+  if (content.toLowerCase().startsWith("!stats ")) {
+    // ... dein bestehender stats Code
+  }
+
+  if (content.toLowerCase().startsWith("!res ")) {
+    // ... dein bestehender res Code
+  }
+
+  if (content.toLowerCase() === "!top3") {
+    // ... dein bestehender top3 Code
+  }
+
+  // --- WorkReports Input (z.B. +1 diving)
+  const match = content.match(/^(-?)(\S+)\s+(\d+)(?:\s+([WDMO]))?$/i);
+  if (match) {
+    // ... dein bestehender Stash/WorkReports Input Handling Code
+  }
+
+});
+
     // --- !stats <member>
     if (content.toLowerCase().startsWith("!stats ")) {
       if (!isLeader) return message.delete().catch(() => {});
