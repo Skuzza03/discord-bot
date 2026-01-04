@@ -148,7 +148,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
     const category = interaction.values[0];
 
-    // Prompt User für Item Name IM CHAT
+    // Prompt User für Item Name IM CHAT und direkt löschen
     const promptMsg = await interaction.update({ content: `Type the item name you want to ${action} in **${category}**:`, components: [] });
 
     const filter = m => m.author.id === interaction.user.id;
@@ -212,11 +212,16 @@ client.on(Events.InteractionCreate, async interaction => {
 // --- Inventory Update Function ---
 async function handleInventoryUpdate(action, category, item, qty, interaction) {
     const inventory = loadInventory();
-    if (!inventory[category]) inventory[category] = {};
-    if (!inventory[category][item]) inventory[category] = 0;
 
-    if (action === 'deposit') inventory[category][item] += qty;
-    else if (action === 'withdraw') {
+    // Kategorie korrekt initialisieren
+    if (!inventory[category]) inventory[category] = {};
+
+    // Item korrekt initialisieren
+    if (!inventory[category][item]) inventory[category][item] = 0;
+
+    if (action === 'deposit') {
+        inventory[category][item] += qty;
+    } else if (action === 'withdraw') {
         if (!inventory[category][item] || inventory[category][item] < qty) {
             return interaction.followUp({ content:"❌ Not enough items!", ephemeral:true });
         }
@@ -226,15 +231,15 @@ async function handleInventoryUpdate(action, category, item, qty, interaction) {
 
     saveInventory(inventory);
 
-    // Update Board
+    // Board Update
     const stashChannel = await client.channels.fetch(stashChannelId).catch(()=>null);
     if (stashChannel) updateInventoryMessage(stashChannel);
 
-    // Send Log
+    // Log
     const logChannelId = action === 'deposit' ? depositLogChannelId : withdrawLogChannelId;
     sendLog(logChannelId, action, interaction.user, item, qty, category);
 
-    // Nur ephemeral Bestätigung
+    // Ephemeral Bestätigung
     await interaction.followUp({ content: `✅ ${action} ${qty}x ${item} (${category}) successful!`, ephemeral: true });
 }
 
