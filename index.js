@@ -27,8 +27,8 @@ const stashChannelId = "1456489075941834949";
 const depositLogChannelId = "1456726864134668359";
 const withdrawLogChannelId = "1456733883021267038";
 
-const workReportChannelId = "1457408055833657364"; // <--- hier deine WorkReports Channel ID
-const workStatsChannelId = "1457408149899317349"; // <--- hier deine WorkStats Channel ID
+const workReportChannelId = "1457408055833657364"; // <--- WorkReports Channel ID
+const workStatsChannelId = "1457408149899317349"; // <--- WorkStats Channel ID
 
 // Dateien
 const inventoryFile = "./inventory.json";
@@ -96,7 +96,6 @@ async function sendLog(channelId, type, user, item, qty, category) {
 }
 
 // --------------- WORK REPORTS ----------------
-
 if (!fs.existsSync(workFile)) fs.writeFileSync(workFile, JSON.stringify({}));
 
 function loadWorkStats() {
@@ -189,6 +188,25 @@ client.on("messageCreate", async (message) => {
 
     // ------------- WORKREPORT HANDLER ----------------
     if (message.channel.id === workReportChannelId) {
+
+        // HELP GUIDE
+        if (message.content.toLowerCase() === "!help") {
+            const embed = new EmbedBuilder()
+                .setTitle("WorkReports & WorkStats Guide")
+                .setDescription(`
+**WorkReports Commands**
+- \`+<number> <item>\` → Add items worked (example: +1 diving)
+- \`<number> <item>\` → Same as above (example: 1 diving)
+- \`!stats <member>\` → Show stats for a member
+- \`!res <member>\` → Reset stats for a member
+- \`!top3\` → Show top 3 workers
+                `)
+                .setColor(0x00ff99)
+                .setTimestamp();
+            message.channel.send({ embeds: [embed] }).then(msg => message.delete().catch(() => {}));
+            return;
+        }
+
         const match = message.content.match(/^([+-]?\d+)\s*(\w+)/i);
         if (!match) return;
 
@@ -207,10 +225,10 @@ client.on("messageCreate", async (message) => {
     }
 
     // ------------- COMMANDS ---------------------
-    if (message.content.toLowerCase().startsWith("!stats")) {
-        const args = message.content.split(" ").slice(1);
-        if (!args.length) return message.reply("❌ Please provide a member name.");
+    const args = message.content.split(" ").slice(1);
 
+    if (message.content.toLowerCase().startsWith("!stats")) {
+        if (!args.length) return message.reply("❌ Please provide a member name.");
         const memberName = args.join(" ");
         const member = findMember(message.guild, memberName);
         if (!member) return message.reply("❌ Member not found.");
@@ -235,9 +253,7 @@ client.on("messageCreate", async (message) => {
     }
 
     if (message.content.toLowerCase().startsWith("!res")) {
-        const args = message.content.split(" ").slice(1);
         if (!args.length) return message.reply("❌ Provide a member name.");
-
         const memberName = args.join(" ");
         const member = findMember(message.guild, memberName);
         if (!member) return message.reply("❌ Member not found.");
@@ -246,7 +262,11 @@ client.on("messageCreate", async (message) => {
         stats[member.id] = {};
         saveWorkStats(stats);
 
-        message.channel.send(`✅ Reset stats for ${member.displayName}`).then(msg => message.delete().catch(() => {}));
+        // Nachricht wird gesendet UND direkt gelöscht
+        message.channel.send(`✅ Reset stats for ${member.displayName}`).then(msg => {
+            setTimeout(() => msg.delete().catch(() => {}), 3000); // nach 3 Sek löschen
+            message.delete().catch(() => {});
+        });
         return;
     }
 
