@@ -29,8 +29,8 @@ const leaderRoles = ["Two Bar", "One Bar"];
 const stashChannelId = "1456489075941834949";
 const depositLogChannelId = "1456726864134668359";
 const withdrawLogChannelId = "1456733883021267038";
-const workInputChannelId = "WORKREPORTS_CHANNEL_ID"; // replace with actual
-const workStatsChannelId = "WORKSTATS_CHANNEL_ID"; // replace with actual
+const workInputChannelId = "1457408055833657364"; // replace with actual
+const workStatsChannelId = "1457408149899317349"; // replace with actual
 
 // Files
 const inventoryFile = "./inventory.json";
