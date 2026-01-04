@@ -2,20 +2,25 @@ const { Client, GatewayIntentBits, ActionRowBuilder, StringSelectMenuBuilder, Bu
 const fs = require('fs');
 
 const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers]
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers
+    ]
 });
 
-// Rollen
+// --- Rollen ---
 const allowedRoles = [
     "Two Bar", "One Bar", "Three Stripes Circle", "Two Stripe", "One Stripe"
 ];
 
-// Channels
+// --- Channels ---
 const stashChannelId = "1456489075941834949";
 const depositLogChannelId = "1456726864134668359";
 const withdrawLogChannelId = "1456733883021267038";
 
-// Inventory Datei
+// --- Inventory Datei ---
 const inventoryFile = './inventory.json';
 
 // --- Load / Save ---
@@ -176,26 +181,32 @@ client.on(Events.InteractionCreate, async interaction => {
     const [qtyStr, action, category, item] = interaction.customId.split('_');
 
     if (qtyStr === "custom") {
-        // Custom Menge
+        // Custom Menge prompt ephemeral
         await interaction.reply({ content: `Type the quantity for **${item}** (${category}):`, ephemeral: true });
 
         const filter = m => m.author.id === interaction.user.id;
         const collector = interaction.channel.createMessageCollector({ filter, time: 30000, max: 1 });
 
-        collector.on('collect', m => {
+        collector.on('collect', async m => {
             const customQty = parseInt(m.content);
-            m.delete().catch(()=>{});
+            m.delete().catch(()=>{}); // User Nachricht sofort löschen
             if (isNaN(customQty) || customQty <= 0) {
                 return interaction.followUp({ content: "❌ Invalid quantity!", ephemeral: true });
             }
-            handleInventoryUpdate(action, category, item, customQty, interaction);
+
+            await handleInventoryUpdate(action, category, item, customQty, interaction);
         });
 
+        // Button-Nachricht sofort löschen
+        await interaction.message.delete().catch(()=>{});
         return;
     }
 
     const qty = parseInt(qtyStr.replace('qty',''));
-    handleInventoryUpdate(action, category, item, qty, interaction);
+    await handleInventoryUpdate(action, category, item, qty, interaction);
+
+    // Button-Nachricht löschen
+    await interaction.message.delete().catch(()=>{});
 });
 
 // --- Inventory Update Function ---
@@ -207,7 +218,7 @@ async function handleInventoryUpdate(action, category, item, qty, interaction) {
     if (action === 'deposit') inventory[category][item] += qty;
     else if (action === 'withdraw') {
         if (!inventory[category][item] || inventory[category][item] < qty) {
-            return interaction.reply({ content:"❌ Not enough items!", ephemeral:true });
+            return interaction.followUp({ content:"❌ Not enough items!", ephemeral:true });
         }
         inventory[category][item] -= qty;
         if (inventory[category][item] === 0) delete inventory[category][item];
@@ -223,8 +234,8 @@ async function handleInventoryUpdate(action, category, item, qty, interaction) {
     const logChannelId = action === 'deposit' ? depositLogChannelId : withdrawLogChannelId;
     sendLog(logChannelId, action, interaction.user, item, qty, category);
 
-    // Buttons löschen + ephemeral Bestätigung
-    await interaction.update({ content: `✅ ${action} ${qty}x ${item} (${category}) successful!`, components: [] });
+    // Nur ephemeral Bestätigung
+    await interaction.followUp({ content: `✅ ${action} ${qty}x ${item} (${category}) successful!`, ephemeral: true });
 }
 
 // --- Login ---
