@@ -22,7 +22,7 @@ const workReportsChannelId = "1457408055833657364";
 const workStatsChannelId = "1457408149899317349";
 const leaderRoles = ["Two Bar", "One Bar"];
 
-// Inventory Datei (Stash bleibt unverändert)
+// Inventory Datei (Stash)
 const inventoryFile = "./inventory.json";
 
 // WorkStats Datei
@@ -110,18 +110,21 @@ client.once("ready", async () => {
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
-  // --- STASH HANDLER ---
+  const content = message.content.trim();
+  const isLeader = message.member.roles.cache.some(r => leaderRoles.includes(r.name));
+
+  // ================= STASH HANDLER =================
   if (message.channel.id === stashChannelId) {
     const hasRole = message.member.roles.cache.some((r) => allowedRoles.includes(r.name));
     if (!hasRole) return;
 
-    if (message.content.toLowerCase() === "!help") {
+    if (content.toLowerCase() === "!help") {
       return message.channel.send(
         "```DEPOSIT: item qty W/D/M/O\nWITHDRAW: -item qty W/D/M/O```"
       );
     }
 
-    const match = message.content.match(/^(-?)(\S+)\s+(\d+)(?:\s+([WDMO]))?$/i);
+    const match = content.match(/^(-?)(\S+)\s+(\d+)(?:\s+([WDMO]))?$/i);
     if (!match) return;
     const isWithdraw = match[1] === "-";
     const item = match[2];
@@ -156,9 +159,8 @@ client.on("messageCreate", async (message) => {
     return message.delete().catch(() => {});
   }
 
-  // --- WORKREPORTS HANDLER ---
+  // ================= WORKREPORTS HANDLER =================
   if (message.channel.id === workReportsChannelId) {
-    const content = message.content.trim();
     const match = content.match(/^\+?(\d+)\s+(\S+)$/i);
     if (!match) return;
 
@@ -178,78 +180,45 @@ client.on("messageCreate", async (message) => {
     return message.delete().catch(() => {});
   }
 
-  // --- WORKSTATS HANDLER ---
+  // ================= WORKSTATS HANDLER =================
   if (message.channel.id === workStatsChannelId) {
-    const content = message.content.trim();
-    const isLeader = message.member.roles.cache.some((r) => leaderRoles.includes(r.name));
 
+    // --- !members Command (permanent)
+    if (content.toLowerCase() === "!members") {
+      let text = "**Gang Members:**\n";
+      const gangMembers = [
+        { name: "Fati", username: "thebicaj" },
+        { name: "Skuzza", username: "sku7zz7a" },
+        { name: "Ubi", username: "ubi07" },
+        { name: "M3D", username: "medii2558" },
+        { name: "-CIMA-", username: "cima12" },
+        { name: "Hashim Thaqi", username: "zezakibardh" },
+        { name: "HOXHA", username: "ghosty7126" },
+        { name: "rizzi95", username: "bucorulzz" },
+        { name: "Tropojan1", username: "kristi7157" },
+        { name: "PSIKOPATI", username: "psikopatii_" }
+      ];
+      gangMembers.forEach(m => {
+        text += `${m.name} → ${m.username}\n`;
+      });
+      return message.channel.send(text); // bleibt permanent
+    }
+
+    const stats = loadWorkStats();
+
+    // --- !help
     if (content.toLowerCase() === "!help") {
       const guide = `
-WorkStats & WorkReports Guide (Leaders)
+WorkReports & WorkStats Guide (Leaders)
 Commands:
 !stats <member> → Show stats for a member
 !res <member> → Reset stats for a member
 !top3 → Show top 3 workers
       `;
-      return message.channel.send(guide);
+      return message.channel.send(guide); // bleibt
     }
 
-    const stats = loadWorkStats();
-
-    client.on("messageCreate", async (message) => {
-  if (message.author.bot) return;
-
-  const content = message.content;
-  const isLeader = message.member.roles.cache.some(r => ["Two Bar","One Bar"].includes(r.name));
-
-  // --- !members Command (Permanent, nicht gelöscht)
-  if (content.toLowerCase() === "!members") {
-    if (!isLeader) return message.delete().catch(() => {});
-
-    let text = "**Gang Members:**\n";
-    const gangMembers = [
-      { name: "Fati", username: "thebicaj" },
-      { name: "Skuzza", username: "sku7zz7a" },
-      { name: "Ubi", username: "ubi07" },
-      { name: "M3D", username: "medii2558" },
-      { name: "-CIMA-", username: "cima12" },
-      { name: "Hashim Thaqi", username: "zezakibardh" },
-      { name: "HOXHA", username: "ghosty7126" },
-      { name: "rizzi95", username: "bucorulzz" },
-      { name: "Tropojan1", username: "kristi7157" },
-      { name: "PSIKOPATI", username: "psikopatii_" }
-    ];
-
-    gangMembers.forEach(m => {
-      text += `${m.name} → ${m.username}\n`;
-    });
-
-    await message.channel.send(text);
-    return; // keine message.delete()
-  }
-
-  // --- !stats, !res, !top3 kommen **nach !members**
-  if (content.toLowerCase().startsWith("!stats ")) {
-    // ... dein bestehender stats Code
-  }
-
-  if (content.toLowerCase().startsWith("!res ")) {
-    // ... dein bestehender res Code
-  }
-
-  if (content.toLowerCase() === "!top3") {
-    // ... dein bestehender top3 Code
-  }
-
-  // --- WorkReports Input (z.B. +1 diving)
-  const match = content.match(/^(-?)(\S+)\s+(\d+)(?:\s+([WDMO]))?$/i);
-  if (match) {
-    // ... dein bestehender Stash/WorkReports Input Handling Code
-  }
-
-});
-
-    // --- !stats <member>
+    // --- !stats
     if (content.toLowerCase().startsWith("!stats ")) {
       if (!isLeader) return message.delete().catch(() => {});
       const memberName = content.slice(7).trim().toLowerCase();
@@ -272,7 +241,7 @@ Commands:
       return message.delete().catch(() => {});
     }
 
-    // --- !res <member>
+    // --- !res
     if (content.toLowerCase().startsWith("!res ")) {
       if (!isLeader) return message.delete().catch(() => {});
       const memberName = content.slice(5).trim().toLowerCase();
@@ -312,6 +281,7 @@ Commands:
       });
       return message.delete().catch(() => {});
     }
+
   }
 });
 
