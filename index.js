@@ -1,25 +1,16 @@
-const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, Events } = require('discord.js');
 const fs = require('fs');
 
 const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers
-    ]
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers]
 });
 
-// Rollen, die Commands benutzen dürfen
+// Rollen
 const allowedRoles = [
-    "Two Bar",
-    "One Bar",
-    "Three Stripes Circle",
-    "Two Stripe",
-    "One Stripe"
+    "Two Bar", "One Bar", "Three Stripes Circle", "Two Stripe", "One Stripe"
 ];
 
-// Channel IDs
+// Channels
 const stashChannelId = "1456489075941834949";
 const depositLogChannelId = "1456726864134668359";
 const withdrawLogChannelId = "1456733883021267038";
@@ -27,7 +18,7 @@ const withdrawLogChannelId = "1456733883021267038";
 // Inventory Datei
 const inventoryFile = './inventory.json';
 
-// --- Load / Save Inventory ---
+// --- Load / Save ---
 function loadInventory() {
     if (!fs.existsSync(inventoryFile)) return {};
     return JSON.parse(fs.readFileSync(inventoryFile));
@@ -37,7 +28,7 @@ function saveInventory(data) {
     fs.writeFileSync(inventoryFile, JSON.stringify(data, null, 2));
 }
 
-// --- Build Stash Text ---
+// --- ASCII MDT Board ---
 function buildStashText(inventory) {
     const padItem = (name, qty) => {
         const maxLen = 17;
@@ -69,7 +60,7 @@ function buildStashText(inventory) {
     return "```" + text + "```";
 }
 
-// --- Update Inventory Message ---
+// --- Update Stash Board ---
 async function updateInventoryMessage(channel) {
     const inventory = loadInventory();
     const stashText = buildStashText(inventory);
@@ -84,7 +75,7 @@ async function updateInventoryMessage(channel) {
     }
 }
 
-// --- Send Modern Log ---
+// --- Modern Embed Logs ---
 async function sendLog(channelId, action, user, item, qty, category) {
     const channel = await client.channels.fetch(channelId).catch(()=>null);
     if (!channel) return;
@@ -103,66 +94,111 @@ async function sendLog(channelId, action, user, item, qty, category) {
     channel.send({ embeds: [embed] });
 }
 
-// --- Bot Ready ---
+// --- Ready ---
 client.once('ready', async () => {
     console.log(`✅ Gang Bot online as ${client.user.tag}`);
     const stashChannel = await client.channels.fetch(stashChannelId).catch(()=>null);
     if (stashChannel) updateInventoryMessage(stashChannel);
 });
 
-// --- Commands ---
+// --- Menu Command ---
 client.on('messageCreate', async message => {
     if (message.author.bot) return;
 
-    const match = message.content.match(/^!(deposit|withdraw)\s+(.+)/i);
-    if (!match) return;
+    if (!message.content.startsWith('!deposit menu') && !message.content.startsWith('!withdraw menu')) return;
 
-    const command = match[1].toLowerCase();
-    let rest = match[2].trim();
-
-    // Rollen Check
+    // Rollencheck
     const hasRole = message.member.roles.cache.some(r => allowedRoles.includes(r.name));
     if (!hasRole) {
         await message.reply("❌ You don’t have permission!").then(msg => setTimeout(()=>msg.delete().catch(()=>{}),4000));
         return message.delete().catch(()=>{});
     }
 
-    // Kategorie aus Klammern
-    let category = "Others";
-    const categoryMatch = rest.match(/\(([^)]+)\)$/);
-    if (categoryMatch) {
-        const catInput = categoryMatch[1].trim().toLowerCase();
-        const validCategories = ["weapons","drugs","materials","others"];
-        if (!validCategories.includes(catInput)) {
-            return message.reply("❌ Invalid category! Use Weapons, Drugs, Materials, Others")
-                          .then(msg => setTimeout(()=>msg.delete().catch(()=>{}), 3000));
-        }
-        category = catInput.charAt(0).toUpperCase() + catInput.slice(1);
-        rest = rest.replace(/\([^)]+\)$/, "").trim();
-    }
+    const action = message.content.startsWith('!deposit') ? "deposit" : "withdraw";
 
-    // Menge = letzte Zahl
-    const qtyMatch = rest.match(/(\d+)$/);
-    if (!qtyMatch) return message.reply("❌ Invalid command!").then(msg=>setTimeout(()=>msg.delete().catch(()=>{}),3000));
-    const qty = parseInt(qtyMatch[1]);
+    // Kategorie Dropdown
+    const row = new ActionRowBuilder()
+        .addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId(`selectCategory_${action}`)
+                .setPlaceholder('Select Category')
+                .addOptions([
+                    { label: 'Weapons', value: 'Weapons' },
+                    { label: 'Drugs', value: 'Drugs' },
+                    { label: 'Materials', value: 'Materials' },
+                    { label: 'Others', value: 'Others' },
+                ])
+        );
 
-    // Itemname = alles davor
-    const itemName = rest.slice(0, rest.lastIndexOf(qtyMatch[1])).trim();
-    if (!itemName || qty <= 0) return;
+    await message.channel.send({ content: `Select category for ${action}:`, components: [row] });
+    message.delete().catch(()=>{});
+});
 
-    // Load Inventory
+// --- Interaction Handling ---
+client.on(Events.InteractionCreate, async interaction => {
+    if (!interaction.isStringSelectMenu()) return;
+
+    const [type, action] = interaction.customId.split('_'); // selectCategory_deposit
+    const category = interaction.values[0];
     const inventory = loadInventory();
     if (!inventory[category]) inventory[category] = {};
-    if (!inventory[category][itemName]) inventory[category][itemName] = 0;
 
-    if (command === "deposit") {
-        inventory[category][itemName] += qty;
-    } else if (command === "withdraw") {
-        if (!inventory[category][itemName] || inventory[category][itemName] < qty) {
-            return message.reply("❌ Not enough items!").then(msg=>setTimeout(()=>msg.delete().catch(()=>{}),3000));
+    // Beispiel Items (du kannst erweitern)
+    const itemsByCategory = {
+        Weapons: ["Pistol","SMG","Knife"],
+        Drugs: ["Marijuana","Cocaine","Weed"],
+        Materials: ["Steel","Wood"],
+        Others: ["Cash","Jewelry"]
+    };
+
+    const row = new ActionRowBuilder()
+        .addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId(`selectItem_${action}_${category}`)
+                .setPlaceholder('Select Item')
+                .addOptions(itemsByCategory[category].map(i=>({ label:i, value:i })))
+        );
+
+    await interaction.update({ content: `Select item in ${category}:`, components: [row] });
+});
+
+client.on(Events.InteractionCreate, async interaction => {
+    if (!interaction.isStringSelectMenu()) return;
+
+    const idParts = interaction.customId.split('_'); 
+    if (idParts[0] !== 'selectItem') return;
+    const action = idParts[1]; // deposit / withdraw
+    const category = idParts[2];
+    const item = interaction.values[0];
+
+    const row = new ActionRowBuilder()
+        .addComponents([
+            new ButtonBuilder().setCustomId(`qty1_${action}_${category}_${item}`).setLabel('1').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`qty5_${action}_${category}_${item}`).setLabel('5').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`qty10_${action}_${category}_${item}`).setLabel('10').setStyle(ButtonStyle.Primary)
+        ]);
+
+    await interaction.update({ content: `Select quantity for ${item}:`, components: [row] });
+});
+
+// --- Button Handling ---
+client.on(Events.InteractionCreate, async interaction => {
+    if (!interaction.isButton()) return;
+
+    const [qtyStr, action, category, item] = interaction.customId.split('_');
+    const qty = parseInt(qtyStr.replace('qty',''));
+
+    const inventory = loadInventory();
+    if (!inventory[category]) inventory[category] = {};
+    if (!inventory[category][item]) inventory[category][item] = 0;
+
+    if (action === 'deposit') inventory[category][item] += qty;
+    else if (action === 'withdraw') {
+        if (!inventory[category][item] || inventory[category][item] < qty) {
+            return interaction.reply({ content:"❌ Not enough items!", ephemeral:true });
         }
-        inventory[category][itemName] -= qty;
-        if (inventory[category][itemName] === 0) delete inventory[category][itemName];
+        inventory[category][item] -= qty;
+        if (inventory[category][item] === 0) delete inventory[category][item];
     }
 
     saveInventory(inventory);
@@ -172,11 +208,10 @@ client.on('messageCreate', async message => {
     if (stashChannel) updateInventoryMessage(stashChannel);
 
     // Send Log
-    const logChannelId = command === "deposit" ? depositLogChannelId : withdrawLogChannelId;
-    sendLog(logChannelId, command, message.author, itemName, qty, category);
+    const logChannelId = action === 'deposit' ? depositLogChannelId : withdrawLogChannelId;
+    sendLog(logChannelId, action, interaction.user, item, qty, category);
 
-    // Delete command message
-    message.delete().catch(()=>{});
+    await interaction.update({ content: `✅ ${action} ${qty}x ${item} (${category}) successful!`, components: [] });
 });
 
 // --- Login ---
