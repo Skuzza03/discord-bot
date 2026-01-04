@@ -144,15 +144,17 @@ client.on(Events.InteractionCreate, async interaction => {
     const category = interaction.values[0];
 
     // Bot fragt Itemname im Chat
-    await interaction.update({ content: `Type the item name you want to ${action} in **${category}**:`, components: [] });
+    const promptMsg = await interaction.update({ content: `Type the item name you want to ${action} in **${category}**:`, components: [] });
 
-    // Message Collector für Itemname
     const filter = m => m.author.id === interaction.user.id;
     const collector = interaction.channel.createMessageCollector({ filter, time: 30000, max: 1 });
 
     collector.on('collect', async m => {
         const itemName = m.content.trim();
         if (!itemName) return;
+
+        m.delete().catch(()=>{}); // User input löschen
+        if (promptMsg) setTimeout(()=> promptMsg.delete().catch(()=>{}), 2000); // Prompt löschen
 
         // Buttons für Menge
         const row = new ActionRowBuilder()
@@ -163,7 +165,6 @@ client.on(Events.InteractionCreate, async interaction => {
             ]);
 
         await interaction.channel.send({ content: `Select quantity for **${itemName}**:`, components: [row] });
-        m.delete().catch(()=>{});
     });
 });
 
@@ -197,6 +198,7 @@ client.on(Events.InteractionCreate, async interaction => {
     const logChannelId = action === 'deposit' ? depositLogChannelId : withdrawLogChannelId;
     sendLog(logChannelId, action, interaction.user, item, qty, category);
 
+    // Ephemeral Bestätigung
     await interaction.update({ content: `✅ ${action} ${qty}x ${item} (${category}) successful!`, components: [] });
 });
 
