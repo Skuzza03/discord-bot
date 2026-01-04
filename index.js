@@ -1,9 +1,14 @@
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers] });
+const client = new Client({ intents: [
+  GatewayIntentBits.Guilds,
+  GatewayIntentBits.GuildMessages,
+  GatewayIntentBits.MessageContent,
+  GatewayIntentBits.GuildMembers
+]});
 
-// Rollen, die Commands benutzen dürfen
+// Rollen die Commands benutzen dürfen
 const allowedRoles = [
   "Two Bar",
   "One Bar",
@@ -20,7 +25,7 @@ const withdrawLogChannelId = "1456733883021267038";
 // Inventory Datei
 const inventoryFile = './inventory.json';
 
-// Load / Save Inventory
+// --- Load / Save Inventory ---
 function loadInventory() {
   if (!fs.existsSync(inventoryFile)) return {};
   return JSON.parse(fs.readFileSync(inventoryFile));
@@ -30,13 +35,13 @@ function saveInventory(data) {
   fs.writeFileSync(inventoryFile, JSON.stringify(data, null, 2));
 }
 
-// Build Stash Text
+// --- Build Stash Text ---
 function buildStashText(inventory) {
-  const padItem = (name, qty, value) => {
+  const padItem = (name, qty) => {
     const maxLen = 17;
     const itemName = name.padEnd(maxLen, " ");
-    const qtyStr = qty === undefined ? "-" : `x${qty}`.padEnd(6, " ");
-    return `  - ${itemName}${qtyStr}| Value: ${value}`;
+    const qtyStr = `x${qty}`.padEnd(6, " ");
+    return `  - ${itemName}${qtyStr}`;
   }
 
   const categories = ["Weapons", "Drugs", "Materials", "Others"];
@@ -49,8 +54,8 @@ function buildStashText(inventory) {
       text += `  - (Empty)\n\n`;
       continue;
     }
-    for (const [itemName, itemData] of Object.entries(items)) {
-      text += padItem(itemName, itemData.qty, itemData.value) + "\n";
+    for (const [itemName, qty] of Object.entries(items)) {
+      text += padItem(itemName, qty) + "\n";
     }
     text += "\n";
   }
@@ -62,7 +67,7 @@ function buildStashText(inventory) {
   return "```" + text + "```";
 }
 
-// Update Inventory Message
+// --- Update Inventory Message ---
 async function updateInventoryMessage(channel) {
   const inventory = loadInventory();
   const stashText = buildStashText(inventory);
@@ -77,22 +82,33 @@ async function updateInventoryMessage(channel) {
   }
 }
 
-// Send Log
+// --- Send Modern Log ---
 async function sendLog(channelId, action, user, item, qty, category) {
   const channel = await client.channels.fetch(channelId).catch(()=>null);
   if (!channel) return;
-  const timestamp = Math.floor(Date.now() / 1000);
-  channel.send(`**${action.toUpperCase()}** | ${user.tag} | ${item} x${qty} | ${category} | <t:${timestamp}:R>`);
+
+  const embed = new EmbedBuilder()
+    .setTitle(action.toUpperCase())
+    .setColor(action === "deposit" ? 0x2ECC71 : 0xE74C3C) // Green for deposit, Red for withdraw
+    .addFields(
+      { name: "User", value: user.tag, inline: true },
+      { name: "Item", value: item, inline: true },
+      { name: "Quantity", value: qty.toString(), inline: true },
+      { name: "Category", value: category, inline: true },
+      { name: "Time", value: `<t:${Math.floor(Date.now()/1000)}:R>`, inline: true }
+    );
+  
+  channel.send({ embeds: [embed] });
 }
 
-// Bot Ready
+// --- Bot Ready ---
 client.once('ready', async () => {
   console.log(`✅ Gang Bot online as ${client.user.tag}`);
   const stashChannel = await client.channels.fetch(stashChannelId).catch(()=>null);
   if (stashChannel) updateInventoryMessage(stashChannel);
 });
 
-// Commands
+// --- Commands ---
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
 
@@ -109,7 +125,7 @@ client.on('messageCreate', async message => {
     return message.delete().catch(()=>{});
   }
 
-  // Kategorie optional (z.B. !deposit skuzza 1 (Weapons))
+  // Kategorie optional z.B. !deposit skuzza 1 (Weapons)
   let category = "Others";
   const categoryMatch = rest.match(/\(([^)]+)\)$/);
   if (categoryMatch) {
@@ -129,24 +145,24 @@ client.on('messageCreate', async message => {
   // Load Inventory
   const inventory = loadInventory();
   if (!inventory[category]) inventory[category] = {};
-  if (!inventory[category][itemName]) inventory[category][itemName] = { qty: 0, value: 1000 }; // default value
+  if (!inventory[category][itemName]) inventory[category][itemName] = 0;
 
-  if (command === "deposit") inventory[category][itemName].qty += qty;
+  if (command === "deposit") inventory[category][itemName] += qty;
   else {
-    if (!inventory[category][itemName] || inventory[category][itemName].qty < qty) {
+    if (!inventory[category][itemName] || inventory[category][itemName] < qty) {
       return message.reply("❌ Not enough items!").then(msg=>setTimeout(()=>msg.delete().catch(()=>{}),3000));
     }
-    inventory[category][itemName].qty -= qty;
-    if (inventory[category][itemName].qty === 0) delete inventory[category][itemName];
+    inventory[category][itemName] -= qty;
+    if (inventory[category][itemName] === 0) delete inventory[category][itemName];
   }
 
   saveInventory(inventory);
 
-  // Update Stash Message
+  // Update Stash Board
   const stashChannel = await client.channels.fetch(stashChannelId).catch(()=>null);
   if (stashChannel) updateInventoryMessage(stashChannel);
 
-  // Send Logs
+  // Send Log
   const logChannelId = command === "deposit" ? depositLogChannelId : withdrawLogChannelId;
   sendLog(logChannelId, command, message.author, itemName, qty, category);
 
@@ -154,5 +170,5 @@ client.on('messageCreate', async message => {
   message.delete().catch(()=>{});
 });
 
-// Bot Login
+// --- Login ---
 client.login(process.env.TOKEN);
