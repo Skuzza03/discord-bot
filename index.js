@@ -163,25 +163,17 @@ client.on("messageCreate", async (message) => {
 
     message.delete().catch(() => {});
 });
-const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
-const fs = require('fs');
-const path = require('path');
+// ================== WORK-REPORTS FEATURE ==================
 
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers
-  ]
-});
-// ================== CONFIG ==================
-const workInputChannelId = "1457408055833657364";  // Mitglieder posten hier
-const workStatsChannelId = "1457408149899317349";   // Leader Stats
-
-const leaderRoles = ["Two Bar", "One Bar"];          // Rollen für !stats
-
+// JSON Datei für Work-Reports
 const workFile = path.join(__dirname, "workStats.json");
+
+// Channel IDs
+const workInputChannelId = "1457408055833657364";  // Mitglieder posten hier
+const workStatsChannelId = "1457408149899317349";    // Leader Stats
+
+// Rollen, die !stats benutzen dürfen
+const leaderRoles = ["Two Bar", "One Bar"];
 
 // ================== JSON HELPERS ==================
 function loadWorkData() {
@@ -193,7 +185,7 @@ function saveWorkData(data) {
   fs.writeFileSync(workFile, JSON.stringify(data, null, 2));
 }
 
-// Summiere Items der letzten 7 Tage
+// Statistik der letzten 7 Tage
 function getWeeklyStats(memberId) {
   const data = loadWorkData();
   if (!data[memberId]) return {};
@@ -254,7 +246,7 @@ client.on("messageCreate", async (message) => {
 
     const sentMsg = await message.channel.send({ embeds: [embed] });
 
-    // Optional: Embed nach 30 Sekunden löschen, damit Input-Channel sauber bleibt
+    // Optional: Embed nach 30 Sekunden löschen
     setTimeout(() => sentMsg.delete().catch(() => {}), 30000);
     return;
   }
@@ -269,7 +261,7 @@ client.on("messageCreate", async (message) => {
     if (args.length < 2) return message.reply("Usage: !stats <Member>");
     const memberName = args[1];
 
-    // Member suchen (Username oder DisplayName oder Mention)
+    // Member suchen (Username, DisplayName oder Mention)
     let member;
     if (message.mentions.members.size > 0) {
       member = message.mentions.members.first();
