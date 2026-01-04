@@ -23,9 +23,9 @@ const allowedRoles = [
 ];
 
 // Channels
-const stashChannelId = "STASH_CHANNEL_ID";
-const depositLogChannelId = "DEPOSIT_LOG_CHANNEL_ID";
-const withdrawLogChannelId = "WITHDRAW_LOG_CHANNEL_ID";
+const stashChannelId = "1456489075941834949";
+const depositLogChannelId = "1456726864134668359";
+const withdrawLogChannelId = "1456733883021267038";
 
 const workReportChannelId = "1457408055833657364"; // WorkReports Channel
 const workStatsChannelId = "1457408149899317349";     // WorkStats Channel für Leader
