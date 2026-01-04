@@ -175,7 +175,6 @@ const client = new Client({
     GatewayIntentBits.GuildMembers
   ]
 });
-
 // ================== CONFIG ==================
 const workInputChannelId = "1457408055833657364";  // Mitglieder posten hier
 const workStatsChannelId = "1457408149899317349";   // Leader Stats
@@ -217,7 +216,7 @@ client.on("messageCreate", async (message) => {
 
   // -------------------- Work Input Channel --------------------
   if (message.channel.id === workInputChannelId) {
-    // Nachricht sofort löschen
+    // Nachricht löschen
     await message.delete().catch(() => {});
 
     // Multi-line Parsing
@@ -270,7 +269,7 @@ client.on("messageCreate", async (message) => {
     if (args.length < 2) return message.reply("Usage: !stats <Member>");
     const memberName = args[1];
 
-    // Member suchen (Username oder DisplayName)
+    // Member suchen (Username oder DisplayName oder Mention)
     let member;
     if (message.mentions.members.size > 0) {
       member = message.mentions.members.first();
