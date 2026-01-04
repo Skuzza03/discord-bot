@@ -169,5 +169,88 @@ client.on('messageCreate', async message => {
     message.delete().catch(()=>{});
 });
 
+client.on('messageCreate', async (message) => {
+    if (message.author.bot) return; // Bot-Nachrichten ignorieren
+
+    // === !help Command ===
+    if (message.content.toLowerCase() === '!help') {
+        const helpText = `
+**PINKPANTHER STASH GUIDE**
+
+(DEPOSIT)   : vortexs19 5 W
+(WITHDRAW)  : -vortexs19 5 W
+
+W = Weapons, D = Drugs, M = Materials, O = Others
+        `;
+        message.channel.send(`\`\`\`${helpText}\`\`\``);
+        return; // WICHTIG: stoppt hier, sonst laufen andere Commands auch
+    }
+
+    // --- hier kommt dein bestehender Code für !deposit / !withdraw ---
+    const match = message.content.match(/^!(deposit|withdraw)\s+(.+)/i);
+    if (!match) return;
+
+    const isWithdraw = match[1].toLowerCase() === "withdraw";
+    let rest = match[2].trim();
+
+    // Rollen Check
+    const hasRole = message.member.roles.cache.some(r => allowedRoles.includes(r.name));
+    if (!hasRole) {
+        await message.reply("❌ You don’t have permission!").then(msg => setTimeout(()=>msg.delete().catch(()=>{}),4000));
+        return message.delete().catch(()=>{});
+    }
+
+    // Kategorie aus Klammern
+    let category = "Others";
+    const categoryMatch = rest.match(/\(([^)]+)\)$/);
+    if (categoryMatch) {
+        const catInput = categoryMatch[1].trim().toLowerCase();
+        const validCategories = ["weapons","drugs","materials","others"];
+        if (!validCategories.includes(catInput)) {
+            return message.reply("❌ Invalid category! Use Weapons, Drugs, Materials, Others")
+                          .then(msg => setTimeout(()=>msg.delete().catch(()=>{}), 3000));
+        }
+        category = catInput.charAt(0).toUpperCase() + catInput.slice(1);
+        rest = rest.replace(/\([^)]+\)$/, "").trim();
+    }
+
+    // Menge = letzte Zahl
+    const qtyMatch = rest.match(/(\d+)$/);
+    if (!qtyMatch) return message.reply("❌ Invalid command!").then(msg=>setTimeout(()=>msg.delete().catch(()=>{}),3000));
+    const qty = parseInt(qtyMatch[1]);
+
+    // Itemname = alles davor
+    const itemName = rest.slice(0, rest.lastIndexOf(qtyMatch[1])).trim();
+    if (!itemName || qty <= 0) return;
+
+    // Load Inventory
+    const inventory = loadInventory();
+    if (!inventory[category]) inventory[category] = {};
+    if (!inventory[category][itemName]) inventory[category][itemName] = 0;
+
+    if (!isWithdraw) {
+        inventory[category][itemName] += qty;
+    } else {
+        if (!inventory[category][itemName] || inventory[category][itemName] < qty) {
+            return message.reply("❌ Not enough items!").then(msg=>setTimeout(()=>msg.delete().catch(()=>{}),3000));
+        }
+        inventory[category][itemName] -= qty;
+        if (inventory[category][itemName] === 0) delete inventory[category][itemName];
+    }
+
+    saveInventory(inventory);
+
+    // Update Stash Board
+    const stashChannel = await client.channels.fetch(stashChannelId).catch(()=>null);
+    if (stashChannel) updateInventoryMessage(stashChannel);
+
+    // Logs
+    const logChannelId = isWithdraw ? withdrawLogChannelId : depositLogChannelId;
+    sendLog(logChannelId, isWithdraw ? "withdraw" : "deposit", message.author, itemName, qty, category);
+
+    // Alles löschen
+    message.delete().catch(()=>{});
+});
+
 // --- Login ---
 client.login(process.env.TOKEN);
