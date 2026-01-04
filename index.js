@@ -17,24 +17,25 @@ const depositLogChannelId = "1456726864134668359";
 const withdrawLogChannelId = "1456733883021267038";
 const allowedRoles = ["Two Bar", "One Bar", "Three Stripes Circle", "Two Stripe", "One Stripe"];
 
-// WorkReports/Stats Channels
 const workReportsChannelId = "1457408055833657364";
 const workStatsChannelId = "1457408149899317349";
 const leaderRoles = ["Two Bar", "One Bar"];
 
-// Inventory Datei
 const inventoryFile = "./inventory.json";
-// WorkStats Datei
 const workFile = path.join(__dirname, "workStats.json");
 
 // ================= HELPER FUNCTIONS =================
+
+// --- Inventory (Stash) ---
 function loadInventory() {
   if (!fs.existsSync(inventoryFile)) return {};
   return JSON.parse(fs.readFileSync(inventoryFile, "utf8"));
 }
+
 function saveInventory(data) {
   fs.writeFileSync(inventoryFile, JSON.stringify(data, null, 2));
 }
+
 function buildStashText(inventory) {
   const categories = ["Weapons", "Drugs", "Materials", "Others"];
   let text = `PINKPANTHER STASH\n──────────────────────────────\n\n`;
@@ -52,6 +53,7 @@ function buildStashText(inventory) {
   }
   return "```" + text + "```";
 }
+
 async function updateStash(channel) {
   const inventory = loadInventory();
   const text = buildStashText(inventory);
@@ -62,6 +64,7 @@ async function updateStash(channel) {
   if (botMsg) await botMsg.edit(text);
   else await channel.send(text);
 }
+
 async function sendLog(channelId, type, user, item, qty, category) {
   const channel = await client.channels.fetch(channelId).catch(() => null);
   if (!channel) return;
@@ -78,14 +81,16 @@ async function sendLog(channelId, type, user, item, qty, category) {
   channel.send({ embeds: [embed] });
 }
 
-// --- WorkStats
+// --- WorkStats ---
 function loadWorkStats() {
   if (!fs.existsSync(workFile)) return {};
   return JSON.parse(fs.readFileSync(workFile, "utf8"));
 }
+
 function saveWorkStats(data) {
   fs.writeFileSync(workFile, JSON.stringify(data, null, 2));
 }
+
 function getDateTime() {
   return new Date().toLocaleString("en-US", { hour12: false });
 }
@@ -100,10 +105,11 @@ client.once("ready", async () => {
 // ================= MESSAGE HANDLER =================
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
+
   const content = message.content.trim();
   const isLeader = message.member.roles.cache.some((r) => leaderRoles.includes(r.name));
 
-  // --- STASH HANDLER ---
+  // --- STASH CHANNEL ---
   if (message.channel.id === stashChannelId) {
     const hasRole = message.member.roles.cache.some((r) => allowedRoles.includes(r.name));
     if (!hasRole) return;
@@ -149,7 +155,7 @@ client.on("messageCreate", async (message) => {
     return message.delete().catch(() => {});
   }
 
-  // --- WORKREPORTS HANDLER ---
+  // --- WORKREPORTS CHANNEL ---
   if (message.channel.id === workReportsChannelId) {
     const match = content.match(/^\+?(\d+)\s+(\S+)$/i);
     if (!match) return;
@@ -163,92 +169,103 @@ client.on("messageCreate", async (message) => {
     if (!stats[username][item]) stats[username][item] = 0;
 
     stats[username][item] += qty;
-    stats[username]._last = getDateTime();
+    stats[username]._last = getDateTime(); // letzte Aktivität
     saveWorkStats(stats);
 
     return message.delete().catch(() => {});
   }
 
-  // --- WORKSTATS HANDLER ---
+  // --- WORKSTATS CHANNEL ---
   if (message.channel.id === workStatsChannelId) {
-
-    // --- !help mit Gang Members
-    if (content.toLowerCase() === "!help") {
-      const guide = `
-WorkReports & WorkStats Guide (Leaders)
-
-**Gang Members:**
-Fati → thebicaj
-Skuzza → sku7zz7a
-Ubi → ubi07
-M3D → medii2558
--CIMA- → cima12
-Hashim Thaqi → zezakibardh
-HOXHA → ghosty7126
-rizzi95 → bucorulzz
-Tropojan1 → kristi7157
-PSIKOPATI → psikopatii_
-
-**Commands:**
-!stats <member> → Show stats for a member
-!res <member> → Reset stats for a member
-!top3 → Show top 3 workers
-      `;
-      return message.channel.send(guide); // permanent, wird nicht gelöscht
-    }
-
     const stats = loadWorkStats();
 
-    // --- !members permanent
-    if (content.toLowerCase() === "!members") {
-      const gangMembers = [
-        { name: "Fati", username: "thebicaj" },
-        { name: "Skuzza", username: "sku7zz7a" },
-        { name: "Ubi", username: "ubi07" },
-        { name: "M3D", username: "medii2558" },
-        { name: "-CIMA-", username: "cima12" },
-        { name: "Hashim Thaqi", username: "zezakibardh" },
-        { name: "HOXHA", username: "ghosty7126" },
-        { name: "rizzi95", username: "bucorulzz" },
-        { name: "Tropojan1", username: "kristi7157" },
-        { name: "PSIKOPATI", username: "psikopatii_" }
-      ];
-      let text = "**Gang Members:**\n";
-      gangMembers.forEach(m => {
-        text += `${m.name} → ${m.username}\n`;
-      });
-      return message.channel.send(text); // permanent
+    // --- !help Embed (permanent)
+    if (content.toLowerCase() === "!help") {
+      const embed = new EmbedBuilder()
+        .setTitle("WorkReports & WorkStats Guide (Leaders)")
+        .setColor(0x3498db)
+        .addFields(
+          { name: "Gang Members", value:
+            "Fati → thebicaj\n" +
+            "Skuzza → sku7zz7a\n" +
+            "Ubi → ubi07\n" +
+            "M3D → medii2558\n" +
+            "-CIMA- → cima12\n" +
+            "Hashim Thaqi → zezakibardh\n" +
+            "HOXHA → ghosty7126\n" +
+            "rizzi95 → bucorulzz\n" +
+            "Tropojan1 → kristi7157\n" +
+            "PSIKOPATI → psikopatii_" 
+          },
+          { name: "Commands", value:
+            "!stats <member> → Show stats for a member\n" +
+            "!res <member> → Reset stats for a member\n" +
+            "!top3 → Show top 3 workers"
+          }
+        )
+        .setFooter({ text: "WorkReports & WorkStats System" });
+
+      return message.channel.send({ embeds: [embed] });
     }
 
-    // --- !stats
+    // --- !members Embed (permanent)
+    if (content.toLowerCase() === "!members") {
+      const embed = new EmbedBuilder()
+        .setTitle("Gang Members")
+        .setColor(0x3498db)
+        .setDescription(
+          "Fati → thebicaj\n" +
+          "Skuzza → sku7zz7a\n" +
+          "Ubi → ubi07\n" +
+          "M3D → medii2558\n" +
+          "-CIMA- → cima12\n" +
+          "Hashim Thaqi → zezakibardh\n" +
+          "HOXHA → ghosty7126\n" +
+          "rizzi95 → bucorulzz\n" +
+          "Tropojan1 → kristi7157\n" +
+          "PSIKOPATI → psikopatii_"
+        );
+      return message.channel.send({ embeds: [embed] });
+    }
+
+    // --- !stats <member>
     if (content.toLowerCase().startsWith("!stats ")) {
       if (!isLeader) return message.delete().catch(() => {});
       const memberName = content.slice(7).trim().toLowerCase();
       if (!stats[memberName]) {
-        await message.reply(`❌ No reports for ${memberName}.`).then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000));
+        await message.reply(`❌ No reports for ${memberName}.`).then((msg) => {
+          setTimeout(() => msg.delete().catch(() => {}), 10000);
+        });
         return message.delete().catch(() => {});
       }
+
       let text = `Work stats for ${memberName}:\n`;
       for (const [item, qty] of Object.entries(stats[memberName])) {
         if (item === "_last") continue;
         text += `${item}: ${qty}\n`;
       }
       text += `Last update: ${stats[memberName]._last}`;
-      await message.channel.send(text).then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000));
+      await message.channel.send(text).then((msg) => {
+        setTimeout(() => msg.delete().catch(() => {}), 10000);
+      });
       return message.delete().catch(() => {});
     }
 
-    // --- !res
+    // --- !res <member>
     if (content.toLowerCase().startsWith("!res ")) {
       if (!isLeader) return message.delete().catch(() => {});
       const memberName = content.slice(5).trim().toLowerCase();
       if (!stats[memberName]) {
-        await message.reply(`❌ No reports for ${memberName}.`).then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000));
+        await message.reply(`❌ No reports for ${memberName}.`).then((msg) => {
+          setTimeout(() => msg.delete().catch(() => {}), 10000);
+        });
         return message.delete().catch(() => {});
       }
       delete stats[memberName];
       saveWorkStats(stats);
-      await message.reply(`✅ Reset stats for ${memberName} at ${getDateTime()}`).then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000));
+      await message.reply(`✅ Reset stats for ${memberName} at ${getDateTime()}`).then((msg) => {
+        setTimeout(() => msg.delete().catch(() => {}), 10000);
+      });
       return message.delete().catch(() => {});
     }
 
@@ -269,10 +286,11 @@ PSIKOPATI → psikopatii_
       for (const a of arr) {
         text += `${a.name}: ${a.sum} → ${a.last}\n`;
       }
-      await message.channel.send(text).then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000));
+      await message.channel.send(text).then((msg) => {
+        setTimeout(() => msg.delete().catch(() => {}), 10000);
+      });
       return message.delete().catch(() => {});
     }
-
   }
 });
 
